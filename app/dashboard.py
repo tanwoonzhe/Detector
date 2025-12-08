@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 import asyncio
 import sys
 from pathlib import Path
+from datasets import load_dataset
 
 # 添加项目根目录到路径
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -172,6 +173,62 @@ async def fetch_real_btc_data(days: int = 90) -> pd.DataFrame:
     
     # 返回空DataFrame，让调用者处理
     return pd.DataFrame()
+
+
+def load_hf_btc(cache_path: Path = None) -> pd.DataFrame:
+    """从HuggingFace数据集中加载BTC数据，缓存到本地，返回小时级别OHLCV"""
+    if cache_path is None:
+        cache_path = Path(__file__).parent.parent / "data" / "hf_btc.parquet"
+
+    try:
+        if cache_path.exists():
+            return pd.read_parquet(cache_path)
+
+        ds = load_dataset("WinkingFace/CryptoLM-Bitcoin-BTC-USDT", split="train")
+        df = ds.to_pandas()
+
+        # 假设列包含 timestamp/open/high/low/close/volume，若名称不同可在此调整
+        rename_map = {}
+        for col in df.columns:
+            lc = col.lower()
+            if lc in ["ts", "time", "timestamp"]:
+                rename_map[col] = "timestamp"
+            elif lc.startswith("open"):
+                rename_map[col] = "open"
+            elif lc.startswith("high"):
+                rename_map[col] = "high"
+            elif lc.startswith("low"):
+                rename_map[col] = "low"
+            elif lc.startswith("close") or lc == "price":
+                rename_map[col] = "close"
+            elif "volume" in lc:
+                rename_map[col] = "volume"
+        df = df.rename(columns=rename_map)
+
+        required = {"timestamp", "open", "high", "low", "close"}
+        if not required.issubset(df.columns):
+            raise ValueError("HF数据集缺少必要列: timestamp/open/high/low/close")
+
+        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
+        df = df.dropna(subset=["timestamp", "open", "high", "low", "close"])
+        df = df.sort_values("timestamp").set_index("timestamp")
+
+        # 聚合到小时级
+        agg = {
+            "open": "first",
+            "high": "max",
+            "low": "min",
+            "close": "last",
+            "volume": "sum",
+        }
+        df_hourly = df.resample("H").agg(agg).dropna()
+
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        df_hourly.to_parquet(cache_path)
+        return df_hourly
+    except Exception as e:
+        print(f"加载HF数据失败: {e}")
+        return pd.DataFrame()
 
 
 def create_prediction_gauge(confidence: float, signal: str) -> go.Figure:
@@ -350,27 +407,34 @@ def main():
         })
         st.dataframe(history_df, use_container_width=True)
     
-    # 演示数据 (实际使用时替换为真实数据)
-    demo_mode = st.sidebar.checkbox("演示模式", value=True)
+    # 数据源选择
+    data_source = st.sidebar.selectbox(
+        "选择数据源",
+        ["CoinGecko实时", "HuggingFace历史", "模拟数据"],
+        index=0
+    )
     
-    if demo_mode:
-        # 先尝试获取真实数据
+    demo_df = pd.DataFrame()
+    if data_source == "CoinGecko实时":
         try:
             demo_df = asyncio.run(fetch_real_btc_data(days=7))
             if demo_df.empty:
                 raise ValueError("CoinGecko返回空数据")
-            st.sidebar.success("已加载真实数据 ✓")
+            st.sidebar.success("已加载CoinGecko数据 ✓")
         except Exception as e:
-            st.sidebar.warning(f"使用演示数据: {str(e)[:30]}")
-            # 生成演示数据（备选）
-            np.random.seed(42)
-            dates = pd.date_range(end=datetime.now(), periods=168, freq='H')
-            
-            # 模拟价格数据
-            base_price = 65000
-            returns = np.random.randn(168) * 0.01
-            prices = base_price * np.cumprod(1 + returns)
-        
+            st.sidebar.warning(f"CoinGecko失败，改用模拟数据: {str(e)[:40]}")
+    elif data_source == "HuggingFace历史":
+        demo_df = load_hf_btc()
+        if demo_df.empty:
+            st.sidebar.warning("HF数据为空，改用模拟数据")
+    
+    if demo_df.empty:
+        # 生成模拟数据（备选）
+        np.random.seed(42)
+        dates = pd.date_range(end=datetime.now(), periods=168, freq='H')
+        base_price = 65000
+        returns = np.random.randn(168) * 0.01
+        prices = base_price * np.cumprod(1 + returns)
         demo_df = pd.DataFrame({
             'open': prices * (1 - np.random.rand(168) * 0.005),
             'high': prices * (1 + np.random.rand(168) * 0.01),
