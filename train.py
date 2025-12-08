@@ -234,6 +234,10 @@ def main():
                        help='批次大小')
     parser.add_argument('--validate', action='store_true',
                        help='是否执行Walk-Forward验证')
+    parser.add_argument('--use-hf', action='store_true',
+                       help='使用HuggingFace历史数据集')
+    parser.add_argument('--merge-recent', action='store_true',
+                       help='合并最近的CoinGecko数据（与--use-hf一起使用）')
     args = parser.parse_args()
     
     # 更新配置
