@@ -231,7 +231,7 @@ class GRUPredictor(PyTorchPredictor):
             mode='min',
             factor=0.5,
             patience=5,
-            verbose=True
+            verbose=False
         )
         
         # 打印模型信息
