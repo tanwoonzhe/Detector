@@ -107,17 +107,17 @@ class FeatureEngineer:
             df['sentiment_reddit'] = 0
             df['sentiment_momentum'] = 0
         
-        # 移除包含NaN的行 (技术指标需要历史数据)
+        # 清理与填充
+        df = df.replace([np.inf, -np.inf], np.nan)
         initial_len = len(df)
+        # 先用前向/后向填充，尽量保留样本，再做 dropna 去除仍缺失的行
+        df = df.ffill().bfill()
         df = df.dropna()
         dropped = initial_len - len(df)
 
-        # 如果全部被删光，尝试用前向/后向填充，再次清洗，防止0样本
         if len(df) == 0:
-            logger.warning("  所有行因NaN被移除，尝试用前向/后向填充恢复数据")
-            df = ohlcv_df.copy()
-            df = df.ffill().bfill()
-            df = df.dropna()
+            raise ValueError("特征工程后数据为空，检查数据源或特征计算是否产生大量缺失值")
+
         logger.info(f"  移除 {dropped} 行含NaN的数据，剩余 {len(df)} 行")
         
         return df
@@ -223,6 +223,9 @@ class FeatureEngineer:
         """
         feature_cols = self.get_feature_columns(df)
         self._feature_columns = feature_cols
+
+        if len(feature_cols) == 0:
+            raise ValueError("未生成任何特征列，检查特征工程步骤")
         
         X = df[feature_cols].values
         
