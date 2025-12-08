@@ -230,8 +230,7 @@ class GRUPredictor(PyTorchPredictor):
             self.optimizer,
             mode='min',
             factor=0.5,
-            patience=5,
-            verbose=False
+            patience=5
         )
         
         # 打印模型信息
