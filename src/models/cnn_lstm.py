@@ -82,13 +82,17 @@ class CNNLSTMNet(nn.Module):
             nn.ReLU(),
             nn.Dropout(dropout),
             nn.Linear(lstm_hidden // 2, n_classes)
+        batch_size = kwargs.pop('batch_size', ModelConfig.BATCH_SIZE)
+        learning_rate = kwargs.pop('learning_rate', ModelConfig.LEARNING_RATE)
+        epochs = kwargs.pop('epochs', ModelConfig.EPOCHS)
+        early_stopping_patience = kwargs.pop('early_stopping_patience', ModelConfig.EARLY_STOPPING_PATIENCE)
         )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            x: (batch, seq_len, input_size)
-            
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            early_stopping_patience=early_stopping_patience,
         Returns:
             logits: (batch, n_classes)
         """

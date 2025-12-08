@@ -126,12 +126,17 @@ class BiLSTMPredictor(PyTorchPredictor):
         dropout: Optional[float] = None,
         **kwargs
     ):
+        batch_size = kwargs.pop('batch_size', ModelConfig.BATCH_SIZE)
+        learning_rate = kwargs.pop('learning_rate', ModelConfig.LEARNING_RATE)
+        epochs = kwargs.pop('epochs', ModelConfig.EPOCHS)
+        early_stopping_patience = kwargs.pop('early_stopping_patience', ModelConfig.EARLY_STOPPING_PATIENCE)
+
         super().__init__(
             name="BiLSTM",
-            batch_size=kwargs.get('batch_size', ModelConfig.BATCH_SIZE),
-            learning_rate=kwargs.get('learning_rate', ModelConfig.LEARNING_RATE),
-            epochs=kwargs.get('epochs', ModelConfig.EPOCHS),
-            early_stopping_patience=kwargs.get('early_stopping_patience', ModelConfig.EARLY_STOPPING_PATIENCE),
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            epochs=epochs,
+            early_stopping_patience=early_stopping_patience,
             **kwargs
         )
         
