@@ -43,11 +43,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def fetch_data():
+async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
     """获取训练数据"""
     logger.info("获取历史数据...")
     
-    # 价格数据
+    if use_hf:
+        logger.info("使用 HuggingFace 数据集...")
+        try:
+            from src.data_collection.hf_loader_fixed import load_hf_btc_data
+            df = load_hf_btc_data()
+            logger.info(f"HF数据: {len(df)} 条记录")
+            
+            if merge_recent:
+                logger.info("合并最新 CoinGecko 数据...")
+                fetcher = CoinGeckoFetcher()
+                recent_data = await fetcher.get_hourly_ohlcv(
+                    symbol="bitcoin",
+                    vs_currency="usd",
+                    days=7
+                )
+                recent_df = recent_data.to_dataframe()
+                df = pd.concat([df, recent_df]).drop_duplicates().sort_index()
+                logger.info(f"合并后: {len(df)} 条记录")
+            
+            return df
+        except Exception as e:
+            logger.error(f"HF数据加载失败: {e}，切换到 CoinGecko")
+    
+    # 使用 CoinGecko 数据
     fetcher = CoinGeckoFetcher()
     cache = CacheManager()
     
@@ -61,6 +84,7 @@ async def fetch_data():
     df = market_data.to_dataframe()
     logger.info(f"获取到 {len(df)} 条价格数据")
     
+    await fetcher.close()
     return df
 
 
@@ -250,7 +274,7 @@ def main():
     
     # 获取数据
     try:
-        df = asyncio.run(fetch_data())
+        df = asyncio.run(fetch_data(use_hf=args.use_hf, merge_recent=args.merge_recent))
     except Exception as e:
         logger.error(f"获取数据失败: {e}")
         logger.info("使用模拟数据进行演示...")

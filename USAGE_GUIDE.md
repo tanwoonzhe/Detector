@@ -61,10 +61,10 @@ python train.py --model all --epochs 200 --use-hf --merge-recent
 
 | 版本 | 文件名 | 特点 | 推荐场景 |
 |------|--------|------|---------|
-| **实时版** ⭐ | `dashboard_realtime.py` | 每15秒自动刷新，智能信号计算 | 日常使用 |
+| **稳定版** ⭐ | `dashboard_stable.py` | 缓存机制，无空白问题，手动+自动刷新 | **首选** |
 | 完整版 | `dashboard_complete.py` | 所有侧边栏选项，手动刷新 | 详细分析 |
 | 简化版 | `dashboard_fixed.py` | 轻量快速，真实价格 | 快速测试 |
-| 原版 | `dashboard.py` | 旧版（可能有数据问题） | 不推荐 |
+| 实时版 | `dashboard_realtime.py` | 旧实时版（有空白bug） | 不推荐 |
 
 ---
 
@@ -156,6 +156,24 @@ pip install torch --index-url https://download.pytorch.org/whl/cu118
 
 ### Q4: 信号一直是 HOLD
 **A**: 市场可能处于横盘期，或数据不足计算技术指标（需要至少 72 小时数据）
+
+### Q5: 训练时出现 "特征工程后数据为空"
+**A**: CoinGecko 数据不足（<100行），解决方法：
+```powershell
+# 方法1: 测试数据量
+python test_data_fetch.py
+
+# 方法2: 使用 HuggingFace 数据集
+python train.py --model gru --epochs 100 --use-hf
+
+# 方法3: 增加天数（但 CoinGecko 免费版限制90天）
+```
+
+### Q6: Dashboard 显示后变空白
+**A**: 使用稳定版 dashboard，已修复无限重载问题：
+```powershell
+streamlit run app/dashboard_stable.py
+```
 
 ---
 

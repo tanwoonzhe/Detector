@@ -349,8 +349,11 @@ def main():
         st.session_state.last_update = current_time
         
         # 获取数据
-        with st.spinner("正在获取最新数据..."):
+        try:
             df = asyncio.run(fetch_real_btc_data(days=7))
+        except Exception as e:
+            st.error(f"数据获取失败: {e}")
+            df = pd.DataFrame()
         
         if not df.empty:
             # 更新显示
@@ -423,9 +426,12 @@ def main():
         remaining = st.session_state.refresh_interval - (current_time - st.session_state.last_update)
         last_update_display.info(f"下次刷新: {remaining:.0f}秒")
     
-    # 自动刷新机制
-    if auto_refresh_enabled:
-        time.sleep(1)
+    # 自动刷新机制（使用更合理的时间间隔）
+    if auto_refresh_enabled and should_refresh:
+        time.sleep(2)  # 给用户 2 秒查看数据
+        st.rerun()
+    elif auto_refresh_enabled:
+        time.sleep(5)  # 等待 5 秒后检查
         st.rerun()
 
 

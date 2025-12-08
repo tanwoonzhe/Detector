@@ -100,24 +100,24 @@ def launch_dashboard():
     """启动仪表板"""
     print("\n📊 启动 Dashboard...")
     print("-" * 40)
-    print("1. 实时自动刷新版 (推荐 - 每15秒自动更新)")
+    print("1. 稳定版 ⭐ (推荐 - 解决空白问题)")
     print("2. 完整版 (真实数据 + 所有侧边栏选项)")
     print("3. 简化版 (真实数据，快速测试)")
-    print("4. 原版 dashboard")
-    print("5. 返回")
+    print("4. 返回")
     
-    choice = input("选择 (1-5): ").strip()
+    choice = input("选择 (1-4): ").strip()
     
-    if choice == "5":
+    if choice == "4":
         return
     
     import subprocess
     
     if choice == "1":
-        cmd = "streamlit run app/dashboard_realtime.py"
-        print("\n⚡ 实时自动刷新版特点:")
-        print("   ✓ 每15秒自动更新价格和信号")
-        print("   ✓ 可调节刷新间隔(5-60秒)")
+        cmd = "streamlit run app/dashboard_stable.py"
+        print("\n⚡ 稳定版特点:")
+        print("   ✓ 使用缓存机制，避免无限重载")
+        print("   ✓ 可选自动刷新 (15/30/60/120/300秒)")
+        print("   ✓ 手动刷新按钮")
         print("   ✓ 智能交易信号计算")
     elif choice == "2":
         cmd = "streamlit run app/dashboard_complete.py"

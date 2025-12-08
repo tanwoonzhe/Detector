@@ -110,13 +110,24 @@ class FeatureEngineer:
         # 清理与填充
         df = df.replace([np.inf, -np.inf], np.nan)
         initial_len = len(df)
+        
+        # 统计每列的缺失值
+        nan_counts = df.isna().sum()
+        if nan_counts.sum() > 0:
+            logger.info(f"  NaN 统计: {nan_counts[nan_counts > 0].to_dict()}")
+        
         # 先用前向/后向填充，尽量保留样本，再做 dropna 去除仍缺失的行
         df = df.ffill().bfill()
         df = df.dropna()
         dropped = initial_len - len(df)
 
         if len(df) == 0:
-            raise ValueError("特征工程后数据为空，检查数据源或特征计算是否产生大量缺失值")
+            logger.error("特征工程后数据为空！")
+            logger.error(f"初始行数: {initial_len}，删除行数: {dropped}")
+            raise ValueError(
+                f"特征工程后数据为空。初始数据: {initial_len} 行，"
+                f"检查是否需要更多历史数据（建议至少90天）或调整窗口大小。"
+            )
 
         logger.info(f"  移除 {dropped} 行含NaN的数据，剩余 {len(df)} 行")
         
