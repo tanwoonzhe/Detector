@@ -100,18 +100,21 @@ def launch_dashboard():
     """启动仪表板"""
     print("\n📊 启动 Dashboard...")
     print("-" * 40)
-    print("1. 使用修正版 dashboard (显示真实价格)")
-    print("2. 使用原版 dashboard")
-    print("3. 返回")
+    print("1. 完整版 (真实数据 + 所有侧边栏选项)")
+    print("2. 简化版 (真实数据，快速测试)")
+    print("3. 原版 dashboard")
+    print("4. 返回")
     
-    choice = input("选择 (1-3): ").strip()
+    choice = input("选择 (1-4): ").strip()
     
-    if choice == "3":
+    if choice == "4":
         return
     
     import subprocess
     
     if choice == "1":
+        cmd = "streamlit run app/dashboard_complete.py"
+    elif choice == "2":
         cmd = "streamlit run app/dashboard_fixed.py"
     else:
         cmd = "python main.py --dashboard"
@@ -138,7 +141,7 @@ def load_hf_dataset():
     
     if confirm == "y":
         try:
-            from src.data_collection.hf_loader import load_hf_btc_data
+            from src.data_collection.hf_loader_fixed import load_hf_btc_data
             df = load_hf_btc_data()
             if not df.empty:
                 print(f"\n✅ 成功加载 {len(df)} 条记录")
