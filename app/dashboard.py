@@ -25,6 +25,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import TradingConfig, ModelConfig
+from src.data_collection import CoinGeckoFetcher
+from src.features.engineer import FeatureEngineer
 
 # 页面配置
 st.set_page_config(
@@ -145,6 +147,31 @@ def create_price_chart(df: pd.DataFrame) -> go.Figure:
     )
     
     return fig
+
+
+async def fetch_real_btc_data(days: int = 90) -> pd.DataFrame:
+    """从CoinGecko获取真实BTC数据，计算技术指标"""
+    try:
+        fetcher = CoinGeckoFetcher()
+        market_data = await fetcher.get_hourly_ohlcv(
+            symbol="bitcoin",
+            days=days,
+            vs_currency="usd"
+        )
+        await fetcher.close()
+        
+        df = market_data.to_dataframe()
+        
+        # 计算技术指标
+        if not df.empty:
+            engineer = FeatureEngineer()
+            df = engineer.create_features(df)
+            return df.dropna()
+    except Exception as e:
+        print(f"获取真实数据失败: {e}，将使用缓存数据")
+    
+    # 返回空DataFrame，让调用者处理
+    return pd.DataFrame()
 
 
 def create_prediction_gauge(confidence: float, signal: str) -> go.Figure:
@@ -327,14 +354,22 @@ def main():
     demo_mode = st.sidebar.checkbox("演示模式", value=True)
     
     if demo_mode:
-        # 生成演示数据
-        np.random.seed(42)
-        dates = pd.date_range(end=datetime.now(), periods=168, freq='H')
-        
-        # 模拟价格数据
-        base_price = 65000
-        returns = np.random.randn(168) * 0.01
-        prices = base_price * np.cumprod(1 + returns)
+        # 先尝试获取真实数据
+        try:
+            demo_df = asyncio.run(fetch_real_btc_data(days=7))
+            if demo_df.empty:
+                raise ValueError("CoinGecko返回空数据")
+            st.sidebar.success("已加载真实数据 ✓")
+        except Exception as e:
+            st.sidebar.warning(f"使用演示数据: {str(e)[:30]}")
+            # 生成演示数据（备选）
+            np.random.seed(42)
+            dates = pd.date_range(end=datetime.now(), periods=168, freq='H')
+            
+            # 模拟价格数据
+            base_price = 65000
+            returns = np.random.randn(168) * 0.01
+            prices = base_price * np.cumprod(1 + returns)
         
         demo_df = pd.DataFrame({
             'open': prices * (1 - np.random.rand(168) * 0.005),
