@@ -110,7 +110,15 @@ class FeatureEngineer:
         # 移除包含NaN的行 (技术指标需要历史数据)
         initial_len = len(df)
         df = df.dropna()
-        logger.info(f"  移除 {initial_len - len(df)} 行含NaN的数据")
+        dropped = initial_len - len(df)
+
+        # 如果全部被删光，尝试用前向/后向填充，再次清洗，防止0样本
+        if len(df) == 0:
+            logger.warning("  所有行因NaN被移除，尝试用前向/后向填充恢复数据")
+            df = ohlcv_df.copy()
+            df = df.ffill().bfill()
+            df = df.dropna()
+        logger.info(f"  移除 {dropped} 行含NaN的数据，剩余 {len(df)} 行")
         
         return df
     
