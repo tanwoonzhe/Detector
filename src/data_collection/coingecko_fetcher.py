@@ -68,7 +68,10 @@ class CoinGeckoFetcher(DataFetcher):
         """获取或创建HTTP会话"""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
-                headers={"Accept": "application/json"}
+                headers={
+                    "Accept": "application/json",
+                    "User-Agent": "btc-predictor/1.0"
+                }
             )
         return self._session
     
@@ -147,13 +150,18 @@ class CoinGeckoFetcher(DataFetcher):
         # 获取新数据
         logger.info(f"从CoinGecko获取 {symbol} 的 {days} 天历史数据...")
         
+        # 注意：CoinGecko 免费版不接受 interval=hourly 参数（会返回 10005），
+        # days=2-90 时自动按小时粒度返回，无需传 interval。
+        params = {
+            "vs_currency": vs_currency,
+            "days": str(days)
+        }
+        if days > 90:
+            params["interval"] = "daily"
+
         data = await self._request(
             f"/coins/{symbol}/market_chart",
-            params={
-                "vs_currency": vs_currency,
-                "days": str(days),
-                "interval": "hourly" if days <= 90 else "daily"
-            }
+            params=params
         )
         
         # 解析数据
