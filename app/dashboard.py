@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import TradingConfig, ModelConfig
-from src.data_collection import CoinGeckoFetcher
+from src.data_collection.coingecko_fetcher import CoinGeckoFetcher
 from src.features.engineer import FeatureEngineer
 
 # 页面配置
