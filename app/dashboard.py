@@ -134,8 +134,8 @@ def create_price_chart(df: pd.DataFrame) -> go.Figure:
             row=3, col=1
         )
         # RSI参考线
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row="3", col="1")
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row="3", col="1")
+        fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+        fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
     
     fig.update_layout(
         title='BTC/USDT 实时行情',
