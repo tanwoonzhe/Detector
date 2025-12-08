@@ -79,7 +79,7 @@ def prepare_data(df: pd.DataFrame):
     # 准备训练数据
     X, y, feature_names = engineer.prepare_training_data(
         df_features, 
-        target_window=1.0,  # 1小时预测
+        target_window=1,  # 1小时预测
         for_classification=True
     )
     

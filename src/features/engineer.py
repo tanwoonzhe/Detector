@@ -52,6 +52,13 @@ class FeatureEngineer:
         
         self._feature_columns: List[str] = []
         self._is_fitted = False
+
+    def _format_window(self, window: Union[int, float]) -> str:
+        """格式化预测窗口，避免出现 1.0/2.0 这种列名不一致的问题"""
+        if float(window).is_integer():
+            return str(int(window))
+        # 去掉可能的尾随0（如0.50）
+        return str(window).rstrip('0').rstrip('.')
     
     def create_features(
         self, 
@@ -152,13 +159,14 @@ class FeatureEngineer:
         close = df['close']
         
         for window in self.prediction_windows:
+            window_label = self._format_window(window)
             # 窗口对应的小时数
             periods = int(window) if window >= 1 else 1
             
             # 未来收益率
             future_return = close.shift(-periods) / close - 1
             
-            col_prefix = f'target_{window}h'
+            col_prefix = f'target_{window_label}h'
             
             # 收益率 (回归目标)
             df[f'{col_prefix}_return'] = future_return
@@ -210,10 +218,11 @@ class FeatureEngineer:
         
         X = df[feature_cols].values
         
+        window_label = self._format_window(target_window)
         if for_classification:
-            y = df[f'target_{target_window}h_direction'].values
+            y = df[f'target_{window_label}h_direction'].values
         else:
-            y = df[f'target_{target_window}h_return'].values
+            y = df[f'target_{window_label}h_return'].values
         
         # 标准化特征
         if not self._is_fitted:
@@ -285,8 +294,9 @@ class FeatureEngineer:
         y_return = {}
         
         for window in self.prediction_windows:
-            y_direction[window] = df[f'target_{window}h_direction'].values
-            y_return[window] = df[f'target_{window}h_return'].values
+            window_label = self._format_window(window)
+            y_direction[window] = df[f'target_{window_label}h_direction'].values
+            y_return[window] = df[f'target_{window_label}h_return'].values
         
         # 创建序列
         seq_len = self.sequence_length
