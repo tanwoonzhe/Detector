@@ -66,6 +66,9 @@ def fetch_btc_data(days: int = 7) -> pd.DataFrame:
             await fetcher.close()
             return market_data.to_dataframe()
         
+        # 使用 nest_asyncio 避免事件循环冲突
+        import nest_asyncio
+        nest_asyncio.apply()
         df = asyncio.run(_fetch())
         
         if not df.empty:

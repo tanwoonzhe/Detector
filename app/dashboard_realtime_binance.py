@@ -67,13 +67,29 @@ def get_api():
 def fetch_realtime_data_sync():
     """获取实时数据（同步版本）"""
     try:
+        # 检查是否已有运行中的事件循环
+        try:
+            loop = asyncio.get_running_loop()
+            # 如果已有循环，使用 nest_asyncio
+            import nest_asyncio
+            nest_asyncio.apply()
+        except RuntimeError:
+            # 没有运行中的循环，创建新的
+            pass
+        
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        result = loop.run_until_complete(_fetch_realtime_data())
-        loop.close()
-        return result
+        try:
+            result = loop.run_until_complete(_fetch_realtime_data())
+            return result
+        finally:
+            # 确保循环被正确关闭
+            if not loop.is_closed():
+                loop.close()
     except Exception as e:
+        import traceback
         st.error(f"获取数据失败: {e}")
+        st.code(traceback.format_exc())
         return None, None
 
 
@@ -93,14 +109,27 @@ async def _fetch_realtime_data():
 def fetch_klines_sync(interval: str, days: int):
     """获取 K 线数据（同步版本）"""
     try:
+        # 检查是否已有运行中的事件循环
+        try:
+            loop = asyncio.get_running_loop()
+            import nest_asyncio
+            nest_asyncio.apply()
+        except RuntimeError:
+            pass
+        
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        api = get_api()
-        result = loop.run_until_complete(api.get_klines("BTCUSDT", interval, days))
-        loop.close()
-        return result
+        try:
+            api = get_api()
+            result = loop.run_until_complete(api.get_klines("BTCUSDT", interval, days))
+            return result
+        finally:
+            if not loop.is_closed():
+                loop.close()
     except Exception as e:
+        import traceback
         st.error(f"获取K线数据失败: {e}")
+        st.code(traceback.format_exc())
         return pd.DataFrame()
 
 
