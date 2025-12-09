@@ -100,17 +100,16 @@ def load_model(model_type: str):
             if not model_path.exists():
                 return None
             model = GRUPredictor(
-                name="GRU",
-                device="cuda" if torch.cuda.is_available() else "cpu",
                 hidden_size=128,
                 num_layers=2,
-                dropout=0.3
+                dropout=0.3,
+                device="cuda" if torch.cuda.is_available() else "cpu"
             )
         elif model_type == "LightGBM":
             model_path = model_dir / "lightgbm_best.txt"
             if not model_path.exists():
                 return None
-            model = LightGBMPredictor(name="LightGBM")
+            model = LightGBMPredictor()
         else:
             return None
         

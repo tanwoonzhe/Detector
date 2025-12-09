@@ -86,17 +86,16 @@ def load_model(model_type: str):
             if not model_path.exists():
                 return None
             model = GRUPredictor(
-                name="GRU",
-                device="cuda" if torch.cuda.is_available() else "cpu",
                 hidden_size=128,
                 num_layers=2,
-                dropout=0.3
+                dropout=0.3,
+                device="cuda" if torch.cuda.is_available() else "cpu"
             )
         elif model_type == "LightGBM":
             model_path = model_dir / "lightgbm_best.txt"
             if not model_path.exists():
                 return None
-            model = LightGBMPredictor(name="LightGBM")
+            model = LightGBMPredictor()
         else:
             return None
         
@@ -110,24 +109,33 @@ def load_model(model_type: str):
 @st.cache_resource
 def get_feature_engineer():
     """获取特征工程器"""
-    config = TradingConfig()
-    return FeatureEngineer(config)
+    return FeatureEngineer()
 
 
 def fetch_data_with_features(days: int = 7):
     """获取数据并生成特征"""
     try:
         # 获取原始数据
-        config = TradingConfig()
-        fetcher = CoinGeckoFetcher(config)
+        fetcher = CoinGeckoFetcher()
         
         async def get_data():
-            return await fetcher.get_ohlcv("bitcoin", days=days)
+            return await fetcher.get_ohlc("bitcoin", days=days)
         
-        df = asyncio.run(get_data())
+        ohlc_list = asyncio.run(get_data())
         
-        if df.empty:
+        if not ohlc_list:
             return None, None
+        
+        # 转换为 DataFrame
+        df = pd.DataFrame([{
+            'timestamp': ohlc.timestamp,
+            'open': ohlc.open,
+            'high': ohlc.high,
+            'low': ohlc.low,
+            'close': ohlc.close,
+            'volume': ohlc.volume
+        } for ohlc in ohlc_list])
+        df = df.set_index('timestamp')
         
         # 生成特征
         engineer = get_feature_engineer()
@@ -242,7 +250,7 @@ def main():
         
         pred_class, pred_proba = make_prediction(model, df_features)
         
-        if pred_class is not None:
+        if pred_class is not None and pred_proba is not None:
             col1, col2 = st.columns([1, 2])
             
             with col1:
