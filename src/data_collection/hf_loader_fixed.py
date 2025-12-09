@@ -8,6 +8,11 @@ import pandas as pd
 from pathlib import Path
 from typing import Optional
 
+try:
+    from tqdm.auto import tqdm
+except ImportError:  # tqdm 非必须，没有则降级为无进度条
+    tqdm = None
+
 
 def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
     """
@@ -89,24 +94,34 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         # 使用更快的重采样方法
         print("重采样中，请稍候...")
         
-        # 使用agg方法进行重采样（更稳定的方法）
-        # 注意: pandas 2.3.x 中 agg 使用字符串 'first' 会调用 Series.first 需要 offset
-        # 为避免 "missing required positional argument: 'offset'"，改用 lambda 取首/尾值
-        agg_dict = {
-            'open': lambda s: s.iloc[0] if len(s) else None,
-            'high': 'max',
-            'low': 'min',
-            'close': lambda s: s.iloc[-1] if len(s) else None
-        }
+        # 分组重采样并显示进度条（兼容 pandas 2.3.x）
+        # 计算预估小时数用于进度条
+        n_hours = int((df.index.max() - df.index.min()).total_seconds() // 3600) + 1
+        iterator = df.groupby(pd.Grouper(freq="h"))
+        if tqdm:
+            iterator = tqdm(iterator, total=n_hours, desc="重采样中", unit="hour")
         
-        if "volume" in df.columns:
-            agg_dict['volume'] = 'sum'
+        records = []
+        has_volume = "volume" in df.columns
+        for ts, g in iterator:
+            if g.empty:
+                continue
+            rec = {
+                "timestamp": ts,
+                "open": g["open"].iloc[0],
+                "high": g["high"].max(),
+                "low": g["low"].min(),
+                "close": g["close"].iloc[-1]
+            }
+            if has_volume:
+                rec["volume"] = g["volume"].sum()
+            records.append(rec)
         
-        # 使用agg一次性完成所有聚合
-        df_hourly = df.resample("h").agg(agg_dict)
+        if not records:
+            raise ValueError("重采样结果为空，请检查源数据")
         
-        # 如果没有volume列，添加默认值
-        if "volume" not in df_hourly.columns:
+        df_hourly = pd.DataFrame(records).set_index("timestamp").sort_index()
+        if not has_volume:
             df_hourly["volume"] = 0
         
         df_hourly = df_hourly.dropna()
