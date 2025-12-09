@@ -29,6 +29,7 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             return pd.read_parquet(cache_path)
         
         print("首次加载HF数据集，需要下载...")
+        print("⚠️ 注意: 数据集较大，可能需要几分钟时间...")
         
         # 延迟导入，避免未安装时报错
         try:
@@ -37,12 +38,29 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             print("请先安装 datasets 库: pip install datasets")
             return pd.DataFrame()
         
-        ds = load_dataset("WinkingFace/CryptoLM-Bitcoin-BTC-USDT", split="train")
-        df = ds.to_pandas()
+        # 使用 streaming=False 避免卡在 Resolving data files
+        # 使用 download_mode="force_reuse" 强制重用已下载的数据，跳过解析步骤
+        try:
+            print("加载 HuggingFace 数据集 (使用缓存)...")
+            ds = load_dataset(
+                "WinkingFace/CryptoLM-Bitcoin-BTC-USDT", 
+                split="train",
+                streaming=False,
+                download_mode="force_reuse",  # 强制使用缓存，跳过解析
+                trust_remote_code=True,
+                verification_mode="no_checks"  # 跳过校验，加速加载
+            )
+            print("✅ 数据集加载成功，正在转换为 DataFrame...")
+            df = ds.to_pandas()  # type: ignore
+            print(f"✅ 成功加载 {len(df)} 行数据")  # type: ignore
+        except Exception as e:
+            print(f"❌ 加载 HuggingFace 数据集失败: {e}")
+            print("建议: 使用 CoinGecko 数据训练（不加 --use-hf 参数）")
+            return pd.DataFrame()
         
         # 列名映射（根据实际数据集调整）
         rename_map = {}
-        for col in df.columns:
+        for col in df.columns:  # type: ignore
             lc = col.lower()
             if lc in ["ts", "time", "timestamp", "date"]:
                 rename_map[col] = "timestamp"
@@ -57,7 +75,7 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             elif "volume" in lc or "vol" in lc:
                 rename_map[col] = "volume"
         
-        df = df.rename(columns=rename_map)
+        df = df.rename(columns=rename_map)  # type: ignore
         
         # 确保必要列存在
         required = {"timestamp", "open", "high", "low", "close"}
@@ -80,7 +98,7 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             agg_dict["volume"] = "sum"
         
         # 使用小写 'h' 避免 FutureWarning
-        df_hourly = df.resample("h").agg(agg_dict).dropna()
+        df_hourly = df.resample("h").agg(agg_dict).dropna()  # type: ignore
         
         # 缓存到本地
         cache_path.parent.mkdir(parents=True, exist_ok=True)

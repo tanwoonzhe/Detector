@@ -155,8 +155,9 @@ def create_price_chart(df: pd.DataFrame) -> go.Figure:
                       line=dict(color='cyan', width=1)),
             row=3, col=1
         )
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+        # 移除 row/col 参数避免类型错误
+        fig.add_hline(y=70, line_dash="dash", line_color="red")
+        fig.add_hline(y=30, line_dash="dash", line_color="green")
     
     fig.update_layout(
         title='BTC/USDT 实时行情',
