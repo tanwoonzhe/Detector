@@ -34,13 +34,13 @@ def test_dataframe_creation():
         low_vals = df_resampled["low"].min()
         close_vals = df_resampled["close"].last()
         
-        # 使用字典创建 DataFrame
+        # 直接使用Series创建DataFrame（避免.values造成的形状问题）
         df_hourly = pd.DataFrame({
-            'open': open_vals.values,
-            'high': high_vals.values,
-            'low': low_vals.values,
-            'close': close_vals.values
-        }, index=open_vals.index)
+            'open': open_vals,
+            'high': high_vals,
+            'low': low_vals,
+            'close': close_vals
+        })
         
         print(f"✅ DataFrame 创建成功: {df_hourly.shape}")
         print(f"✅ 列: {df_hourly.columns.tolist()}")

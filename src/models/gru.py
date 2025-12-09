@@ -207,6 +207,11 @@ class GRUPredictor(PyTorchPredictor):
         self.n_classes = n_classes
         self.input_shape = input_shape  # 保存输入形状
         
+        # 保存到config供save/load使用
+        if not isinstance(self.config, dict):
+            self.config = {}
+        self.config['n_classes'] = n_classes
+        
         self.model = GRUAttentionNet(
             input_size=n_features,
             hidden_size=self.hidden_size,

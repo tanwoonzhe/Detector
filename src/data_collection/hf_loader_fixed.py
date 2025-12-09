@@ -98,13 +98,13 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         low_vals = df_resampled["low"].min()
         close_vals = df_resampled["close"].last()
         
-        # 使用字典创建 DataFrame（最稳定的方法）
+        # 直接使用Series创建DataFrame（避免.values造成的形状问题）
         df_hourly = pd.DataFrame({
-            'open': open_vals.values,
-            'high': high_vals.values,
-            'low': low_vals.values,
-            'close': close_vals.values
-        }, index=open_vals.index)
+            'open': open_vals,
+            'high': high_vals,
+            'low': low_vals,
+            'close': close_vals
+        })
         
         if "volume" in df.columns:
             df_hourly["volume"] = df_resampled["volume"].sum()

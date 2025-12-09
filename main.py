@@ -103,11 +103,8 @@ async def run_prediction():
     if model_path.exists():
         logger.info("加载预训练模型...")
         model = GRUPredictor()
-        model.build(
-            input_shape=(ModelConfig.SEQUENCE_LENGTH, len(engineer.get_feature_columns(df_features))),
-            n_classes=3
-        )
-        model.load(model_path)
+        # 使用auto_build自动从checkpoint读取配置并构建模型
+        model.load(model_path, auto_build=True)
         
         # 获取最新序列
         X = engineer.get_latest_sequence(df_features)

@@ -100,9 +100,6 @@ def load_model(model_type: str):
             if not model_path.exists():
                 return None
             
-            # 加载检查点以获取输入形状
-            checkpoint = torch.load(model_path, map_location="cuda" if torch.cuda.is_available() else "cpu")
-            
             # 创建模型
             model = GRUPredictor(
                 hidden_size=128,
@@ -111,15 +108,8 @@ def load_model(model_type: str):
                 device="cuda" if torch.cuda.is_available() else "cpu"
             )
             
-            # 从检查点获取输入形状（假设保存了配置）
-            if 'config' in checkpoint and 'input_shape' in checkpoint['config']:
-                input_shape = checkpoint['config']['input_shape']
-            else:
-                # 默认值：24小时窗口，假设有合理的特征数
-                input_shape = (24, 100)  # 会在实际使用时调整
-            
-            model.build(input_shape=input_shape, n_classes=3)
-            model.load(model_path)
+            # 使用auto_build自动从checkpoint读取配置并构建模型
+            model.load(model_path, auto_build=True)
             
         elif model_type == "LightGBM":
             model_path = model_dir / "lightgbm_best.txt"

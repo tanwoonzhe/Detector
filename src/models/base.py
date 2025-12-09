@@ -292,14 +292,26 @@ class PyTorchPredictor(BasePredictor):
         }, path)
         logger.info(f"模型已保存: {path}")
     
-    def load(self, path: Path) -> None:
-        """加载模型"""
+    def load(self, path: Path, auto_build: bool = True) -> None:
+        """
+        加载模型
+        
+        Args:
+            path: 模型文件路径
+            auto_build: 如果模型未构建，是否自动从checkpoint中读取配置并构建
+        """
         path = Path(path)
         checkpoint = torch.load(path, map_location=self.device)
         
-        # 确保模型已构建
+        # 如果模型未构建，尝试自动构建
         if self.model is None:
-            raise RuntimeError("模型未构建！请先调用 build() 方法")
+            if auto_build and 'config' in checkpoint and 'input_shape' in checkpoint['config']:
+                input_shape = checkpoint['config']['input_shape']
+                n_classes = checkpoint['config'].get('n_classes', 3)
+                logger.info(f"从checkpoint自动构建模型: input_shape={input_shape}, n_classes={n_classes}")
+                self.build(input_shape=tuple(input_shape), n_classes=n_classes)
+            else:
+                raise RuntimeError("模型未构建！请先调用 build() 方法，或在checkpoint中包含input_shape信息")
         
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.history = checkpoint.get('history', {})
