@@ -82,6 +82,12 @@ def train_menu():
     # 构造命令
     import subprocess
     
+    # 调试输出
+    print(f"\n📝 选择信息:")
+    print(f"   数据源选择: {choice}")
+    print(f"   模型选择: {model_choice} -> {model}")
+    print(f"   训练轮数: {epochs}")
+    
     if choice == "1":
         cmd = f"python train.py --model {model} --epochs {epochs}"
     elif choice == "2":

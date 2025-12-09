@@ -66,7 +66,7 @@ class TradingConfig:
 # ===== 模型配置 =====
 class ModelConfig:
     # 序列长度（使用多少小时历史数据）
-    SEQUENCE_LENGTH = 168  # 7天 = 168小时
+    SEQUENCE_LENGTH = 24  # 1天 = 24小时 (针对90天数据优化)
     
     # 通用 Dropout
     DROPOUT = 0.2

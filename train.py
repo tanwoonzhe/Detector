@@ -87,11 +87,11 @@ def prepare_data(df: pd.DataFrame):
     df_features = engineer.create_features(df)
     logger.info(f"特征创建后: {len(df_features)} 行")
     
-    if len(df_features) < 100:
-        logger.error(f"特征工程后数据不足: {len(df_features)} 行 < 100 行最小要求")
+    if len(df_features) < 50:
+        logger.error(f"特征工程后数据不足: {len(df_features)} 行 < 50 行最小要求")
         raise ValueError(
             f"特征工程后仅剩 {len(df_features)} 行数据，不足以训练。"
-            f"建议：1) 使用更多天数的数据 2) 减小特征窗口大小"
+            f"建议：1) 使用更多天数的数据 2) 减小特征窗口大小（当前SEQUENCE_LENGTH={ModelConfig.SEQUENCE_LENGTH}）"
         )
     
     # 创建标签
