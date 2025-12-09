@@ -89,26 +89,22 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         # 使用更快的重采样方法
         print("重采样中，请稍候...")
         
-        # 使用更简单的重采样方式
-        df_resampled = df.resample("h")
-        
-        # 分别获取每个列的值并创建 DataFrame
-        open_vals = df_resampled["open"].first()
-        high_vals = df_resampled["high"].max()
-        low_vals = df_resampled["low"].min()
-        close_vals = df_resampled["close"].last()
-        
-        # 直接使用Series创建DataFrame（避免.values造成的形状问题）
-        df_hourly = pd.DataFrame({
-            'open': open_vals,
-            'high': high_vals,
-            'low': low_vals,
-            'close': close_vals
-        })
+        # 使用agg方法进行重采样（更稳定的方法）
+        agg_dict = {
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last'
+        }
         
         if "volume" in df.columns:
-            df_hourly["volume"] = df_resampled["volume"].sum()
-        else:
+            agg_dict['volume'] = 'sum'
+        
+        # 使用agg一次性完成所有聚合
+        df_hourly = df.resample("h").agg(agg_dict)
+        
+        # 如果没有volume列，添加默认值
+        if "volume" not in df_hourly.columns:
             df_hourly["volume"] = 0
         
         df_hourly = df_hourly.dropna()

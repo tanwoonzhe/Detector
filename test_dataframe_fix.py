@@ -28,47 +28,48 @@ def test_dataframe_resample():
         
         print(f"原始数据: {data.shape}")
         
-        # 模拟hf_loader_fixed.py中的重采样逻辑
-        df_resampled = data.resample("h")
-        
-        open_vals = df_resampled["open"].first()
-        high_vals = df_resampled["high"].max()
-        low_vals = df_resampled["low"].min()
-        close_vals = df_resampled["close"].last()
-        
-        print(f"open_vals类型: {type(open_vals)}, 形状: {open_vals.shape if hasattr(open_vals, 'shape') else 'N/A'}")
-        print(f"open_vals.values类型: {type(open_vals.values)}, 形状: {open_vals.values.shape}")
-        
-        # 测试旧方法（会失败）
-        print("\n尝试旧方法（使用.values）...")
+        # 测试方法1: 分别获取每个列（旧方法）
+        print("\n方法1: 分别获取每个列...")
         try:
-            df_old = pd.DataFrame({
-                'open': open_vals.values,
-                'high': high_vals.values,
-                'low': low_vals.values,
-                'close': close_vals.values
-            }, index=open_vals.index)
-            print("  ⚠️ 旧方法意外成功（可能pandas版本不同）")
+            df_resampled = data.resample("h")
+            open_vals = df_resampled["open"].first()
+            high_vals = df_resampled["high"].max()
+            low_vals = df_resampled["low"].min()
+            close_vals = df_resampled["close"].last()
+            
+            print(f"  open_vals类型: {type(open_vals)}, 形状: {open_vals.shape}")
+            print(f"  open_vals.values类型: {type(open_vals.values)}, 形状: {open_vals.values.shape}")
+            
+            df_method1 = pd.DataFrame({
+                'open': open_vals,
+                'high': high_vals,
+                'low': low_vals,
+                'close': close_vals
+            })
+            print(f"  ✓ 方法1结果: {df_method1.shape}")
         except Exception as e:
-            print(f"  ✓ 旧方法失败（符合预期）: {str(e)[:100]}")
+            print(f"  ✗ 方法1失败: {str(e)[:100]}")
         
-        # 测试新方法（直接使用Series）
-        print("\n使用新方法（直接使用Series）...")
-        df_hourly = pd.DataFrame({
-            'open': open_vals,
-            'high': high_vals,
-            'low': low_vals,
-            'close': close_vals
-        })
-        
-        print(f"  ✓ 重采样后数据: {df_hourly.shape}")
-        print(f"  ✓ 列: {df_hourly.columns.tolist()}")
-        print(f"  ✓ 索引类型: {type(df_hourly.index)}")
-        print(f"  ✓ 前3行:\n{df_hourly.head(3)}")
-        
-        # 添加volume测试
-        df_hourly["volume"] = df_resampled["volume"].sum()
-        print(f"  ✓ 添加volume后: {df_hourly.shape}")
+        # 测试方法2: 使用agg（新方法，更稳定）
+        print("\n方法2: 使用agg一次性聚合...")
+        try:
+            agg_dict = {
+                'open': 'first',
+                'high': 'max',
+                'low': 'min',
+                'close': 'last',
+                'volume': 'sum'
+            }
+            
+            df_hourly = data.resample("h").agg(agg_dict)
+            
+            print(f"  ✓ 重采样后数据: {df_hourly.shape}")
+            print(f"  ✓ 列: {df_hourly.columns.tolist()}")
+            print(f"  ✓ 索引类型: {type(df_hourly.index)}")
+            print(f"  ✓ 前3行:\n{df_hourly.head(3)}")
+            print(f"  ✓ 数据类型:\n{df_hourly.dtypes}")
+        except Exception as e:
+            print(f"  ✗ 方法2失败: {str(e)[:100]}")
         
         print("\n✅ DataFrame 重采样测试通过！")
         return True

@@ -78,28 +78,24 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         # 聚合到小时级（如果数据是分钟级或更细）
         print(f"正在重采样到小时级别（共 {len(df)} 行）...")
         
-        # 使用更简单的重采样方式
+        # 使用agg方法进行重采样（更稳定的方法）
         print("重采样中，请稍候...")
         
-        df_resampled = df.resample("h")
-        
-        # 分别获取每个列的值并创建 DataFrame
-        open_vals = df_resampled["open"].first()
-        high_vals = df_resampled["high"].max()
-        low_vals = df_resampled["low"].min()
-        close_vals = df_resampled["close"].last()
-        
-        # 使用字典创建 DataFrame（最稳定的方法）
-        df_hourly = pd.DataFrame({
-            'open': open_vals.values,
-            'high': high_vals.values,
-            'low': low_vals.values,
-            'close': close_vals.values
-        }, index=open_vals.index)
+        agg_dict = {
+            'open': 'first',
+            'high': 'max',
+            'low': 'min',
+            'close': 'last'
+        }
         
         if "volume" in df.columns:
-            df_hourly["volume"] = df_resampled["volume"].sum()
-        else:
+            agg_dict['volume'] = 'sum'
+        
+        # 使用agg一次性完成所有聚合
+        df_hourly = df.resample("h").agg(agg_dict)
+        
+        # 如果没有volume列，添加默认值
+        if "volume" not in df_hourly.columns:
             df_hourly["volume"] = 0
         
         df_hourly = df_hourly.dropna()
