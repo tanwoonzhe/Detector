@@ -106,10 +106,11 @@ async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
         await fetcher.close()
     
     # 确保时区一致
-    if df.index.tz is None:
-        df.index = df.index.tz_localize('UTC')
-    else:
-        df.index = df.index.tz_convert('UTC')
+    if hasattr(df.index, 'tz'):
+        if df.index.tz is None:  # type: ignore
+            df.index = df.index.tz_localize('UTC')  # type: ignore
+        else:
+            df.index = df.index.tz_convert('UTC')  # type: ignore
     
     return df
 

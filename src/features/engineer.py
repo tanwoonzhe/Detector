@@ -123,9 +123,9 @@ class FeatureEngineer:
 
         if len(df) == 0:
             logger.error("特征工程后数据为空！")
-            logger.error(f"初始行数: {initial_len}，删除行数: {dropped}")
+            logger.error(f"初始行数: {initial_len}，删除行数: {dropped}，剩余: {len(df)}")
             raise ValueError(
-                f"特征工程后数据为空。初始数据: {initial_len} 行，"
+                f"特征工程后数据为空。初始数据: {initial_len} 行，删除了 {dropped} 行。"
                 f"检查是否需要更多历史数据（建议至少90天）或调整窗口大小。"
             )
 

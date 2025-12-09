@@ -64,7 +64,9 @@ class BinancePublicAPI:
         url = f"{self.base_url}/ticker/price"
         
         try:
-            async with session.get(url, params={"symbol": symbol}) as response:
+            async with session.get(url, params={"symbol": symbol}, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 451:
+                    raise Exception("Binance API 访问受限（451错误）。可能是地区限制。")
                 response.raise_for_status()
                 data = await response.json()
                 
@@ -96,7 +98,9 @@ class BinancePublicAPI:
         url = f"{self.base_url}/ticker/24hr"
         
         try:
-            async with session.get(url, params={"symbol": symbol}) as response:
+            async with session.get(url, params={"symbol": symbol}, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                if response.status == 451:
+                    raise Exception("Binance API 访问受限（451错误）。可能是地区限制，请使用 VPN 或切换到 CoinGecko。")
                 response.raise_for_status()
                 data = await response.json()
                 
@@ -153,7 +157,9 @@ class BinancePublicAPI:
         }
         
         try:
-            async with session.get(url, params=params) as response:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status == 451:
+                    raise Exception("Binance API 访问受限（451错误）。可能是地区限制。")
                 response.raise_for_status()
                 klines = await response.json()
                 

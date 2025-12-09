@@ -102,7 +102,7 @@ async def test_train_data_loading():
         # 测试 CoinGecko 数据
         print("\n📊 测试 CoinGecko 数据...")
         fetcher = CoinGeckoFetcher()
-        market_data = await fetcher.get_hourly_ohlcv("bitcoin", "usd", days=7)
+        market_data = await fetcher.get_hourly_ohlcv(symbol="bitcoin", vs_currency="usd", days=7)
         df_cg = market_data.to_dataframe()
         await fetcher.close()
         print(f"✅ CoinGecko: {len(df_cg)} 条")
