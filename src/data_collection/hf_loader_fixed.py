@@ -69,18 +69,18 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         df = df.dropna(subset=["timestamp", "open", "high", "low", "close"])
         df = df.sort_values("timestamp").set_index("timestamp")
         
-        # 聚合到小时级（修复 offset 参数问题）
+        # 聚合到小时级（使用 lambda 函数避免 offset 参数问题）
         agg_dict = {
-            "open": "first",
+            "open": lambda x: x.iloc[0] if len(x) > 0 else None,
             "high": "max",
             "low": "min",
-            "close": "last",
+            "close": lambda x: x.iloc[-1] if len(x) > 0 else None,
         }
         if "volume" in df.columns:
             agg_dict["volume"] = "sum"
         
-        # 使用 origin='start' 替代 offset 参数，并修复 'H' 警告
-        df_hourly = df.resample("h", origin='start').agg(agg_dict).dropna()
+        # 使用小写 'h' 避免 FutureWarning
+        df_hourly = df.resample("h").agg(agg_dict).dropna()
         
         # 缓存到本地
         cache_path.parent.mkdir(parents=True, exist_ok=True)

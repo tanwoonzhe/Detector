@@ -58,78 +58,83 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# 不要缓存 API 实例，因为它包含 aiohttp session 会绑定到特定的事件循环
+
+
 @st.cache_resource
-def get_api():
-    """获取 Binance API 客户端（缓存）"""
-    return BinancePublicAPI()
+def get_event_loop():
+    """获取或创建持久化的事件循环"""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    return loop
 
 
 def fetch_realtime_data_sync():
-    """获取实时数据（同步版本）"""
+    """获取实时数据（同步版本）- 使用持久化事件循环"""
     try:
-        # 检查是否已有运行中的事件循环
+        # 使用持久化的事件循环
+        loop = get_event_loop()
+        
+        # 创建一个新的 API 实例并在其中执行
+        async def _fetch():
+            # 每次创建新的 session
+            api = BinancePublicAPI()
+            try:
+                price_data = await api.get_current_price("BTCUSDT")
+                ticker_data = await api.get_ticker_24h("BTCUSDT")
+                return price_data, ticker_data
+            finally:
+                await api.close()
+        
+        # 如果循环已经在运行，使用 nest_asyncio
         try:
-            loop = asyncio.get_running_loop()
-            # 如果已有循环，使用 nest_asyncio
             import nest_asyncio
             nest_asyncio.apply()
-        except RuntimeError:
-            # 没有运行中的循环，创建新的
+        except:
             pass
         
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            result = loop.run_until_complete(_fetch_realtime_data())
-            return result
-        finally:
-            # 确保循环被正确关闭
-            if not loop.is_closed():
-                loop.close()
+        result = loop.run_until_complete(_fetch())
+        return result
     except Exception as e:
         import traceback
         st.error(f"获取数据失败: {e}")
-        st.code(traceback.format_exc())
+        with st.expander("错误详情"):
+            st.code(traceback.format_exc())
         return None, None
 
 
-async def _fetch_realtime_data():
-    """内部异步获取实时数据"""
-    api = get_api()
-    
-    # 并行获取多个数据
-    price_task = api.get_current_price("BTCUSDT")
-    ticker_task = api.get_ticker_24h("BTCUSDT")
-    
-    price_data, ticker_data = await asyncio.gather(price_task, ticker_task)
-    
-    return price_data, ticker_data
-
-
 def fetch_klines_sync(interval: str, days: int):
-    """获取 K 线数据（同步版本）"""
+    """获取 K 线数据（同步版本）- 使用持久化事件循环"""
     try:
-        # 检查是否已有运行中的事件循环
+        loop = get_event_loop()
+        
+        async def _fetch():
+            api = BinancePublicAPI()
+            try:
+                result = await api.get_klines("BTCUSDT", interval, days)
+                return result
+            finally:
+                await api.close()
+        
         try:
-            loop = asyncio.get_running_loop()
             import nest_asyncio
             nest_asyncio.apply()
-        except RuntimeError:
+        except:
             pass
         
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            api = get_api()
-            result = loop.run_until_complete(api.get_klines("BTCUSDT", interval, days))
-            return result
-        finally:
-            if not loop.is_closed():
-                loop.close()
+        result = loop.run_until_complete(_fetch())
+        return result
     except Exception as e:
         import traceback
         st.error(f"获取K线数据失败: {e}")
-        st.code(traceback.format_exc())
+        with st.expander("错误详情"):
+            st.code(traceback.format_exc())
         return pd.DataFrame()
 
 
