@@ -76,6 +76,16 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             raise ValueError(f"HF数据集缺少必要列。当前列: {df.columns.tolist()}")
 
         # 转换数值列为浮点，避免字符串/对象写 parquet 失败
+        def _flatten_column(col_data):
+            import numpy as np
+            if hasattr(col_data, "to_numpy"):
+                arr = col_data.to_numpy()
+            else:
+                arr = np.array(col_data)
+            if getattr(arr, "ndim", 1) > 1:
+                arr = arr[:, 0]
+            return pd.Series(arr)
+
         def _unwrap_scalar(x):
             if isinstance(x, (list, tuple)):
                 return x[0] if len(x) else None
@@ -83,12 +93,15 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
                 try:
                     return x.item()
                 except Exception:
-                    return x[0] if len(x) else None
+                    try:
+                        return x[0] if len(x) else None
+                    except Exception:
+                        return None
             return x
 
         for col in ["open", "high", "low", "close", "volume"]:
             if col in df.columns:
-                col_series = pd.Series(df[col]).apply(_unwrap_scalar)
+                col_series = _flatten_column(df[col]).apply(_unwrap_scalar)
                 df[col] = pd.to_numeric(col_series.astype(str), errors="coerce")
         
         # 时间戳处理
