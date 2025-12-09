@@ -84,14 +84,22 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             raise ValueError(f"HF数据集缺少必要列。当前列: {df.columns.tolist()}")
 
         # 转换数值列为浮点，过滤异常字符串/对象，防止聚合后写 parquet 失败
+        def _unwrap_scalar(x):
+            # 将 list/tuple/ndarray 转为标量，优先取第一个元素
+            if isinstance(x, (list, tuple)):
+                return x[0] if len(x) else None
+            if hasattr(x, "shape") and getattr(x, "ndim", 1) > 0:
+                try:
+                    return x.item()
+                except Exception:
+                    return x[0] if len(x) else None
+            return x
+
         for col in ["open", "high", "low", "close", "volume"]:
             if col in df.columns:
-                col_data = df[col]
-                # 确保是一维Series
-                if not isinstance(col_data, pd.Series):
-                    col_data = pd.Series(col_data)
-                # 对嵌套/对象列先转成字符串再转数值，无法转换的变为 NaN
-                df[col] = pd.to_numeric(col_data.astype(str), errors="coerce")
+                # 对每个元素先解包为标量，再转成字符串->数值
+                col_series = pd.Series(df[col]).apply(_unwrap_scalar)
+                df[col] = pd.to_numeric(col_series.astype(str), errors="coerce")
         
         # 时间戳处理
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
