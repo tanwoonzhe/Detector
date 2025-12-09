@@ -76,16 +76,21 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         df = df.sort_values("timestamp").set_index("timestamp")
         
         # 聚合到小时级（如果数据是分钟级或更细）
+        print(f"正在重采样到小时级别（共 {len(df)} 行）...")
+        
+        # 使用更快的字符串方法代替 lambda
         agg_dict = {
-            "open": lambda x: x.iloc[0] if len(x) > 0 else None,
+            "open": "first",
             "high": "max",
             "low": "min",
-            "close": lambda x: x.iloc[-1] if len(x) > 0 else None,
+            "close": "last",
         }
         if "volume" in df.columns:
             agg_dict["volume"] = "sum"
         
+        print("重采样中，请稍候...")
         df_hourly = df.resample("h").agg(agg_dict).dropna()  # type: ignore
+        print(f"✅ 重采样完成，得到 {len(df_hourly)} 条小时数据")
         
         # 缓存到本地
         cache_path.parent.mkdir(parents=True, exist_ok=True)
