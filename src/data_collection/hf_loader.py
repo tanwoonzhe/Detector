@@ -78,7 +78,10 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         # 转换数值列为浮点，避免字符串/对象写 parquet 失败
         for col in ["open", "high", "low", "close", "volume"]:
             if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce")
+                col_data = df[col]
+                if not isinstance(col_data, pd.Series):
+                    col_data = pd.Series(col_data)
+                df[col] = pd.to_numeric(col_data.astype(str), errors="coerce")
         
         # 时间戳处理
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
