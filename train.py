@@ -47,25 +47,63 @@ async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
     """获取训练数据"""
     logger.info("获取历史数据...")
     
-    # 暂时只使用 CoinGecko 数据（稳定可靠）
-    # HF 数据集有时区问题，需要单独修复
+    df = None
+    
+    # 选项1: 使用 HuggingFace 历史数据
     if use_hf:
-        logger.warning("HF数据集功能正在修复中，使用 CoinGecko 数据")
+        logger.info("📥 加载 HuggingFace 历史数据集...")
+        try:
+            from src.data_collection.hf_loader_fixed import load_hf_btc_data
+            df = load_hf_btc_data()
+            
+            if not df.empty:
+                logger.info(f"✅ HF数据加载成功: {len(df)} 条记录")
+                logger.info(f"   时间范围: {df.index.min()} ~ {df.index.max()}")
+                
+                # 如果需要合并最新数据
+                if merge_recent:
+                    logger.info("📊 合并最新 CoinGecko 数据...")
+                    fetcher = CoinGeckoFetcher()
+                    recent_data = await fetcher.get_hourly_ohlcv(
+                        symbol="bitcoin",
+                        vs_currency="usd",
+                        days=7  # 获取最近7天数据
+                    )
+                    await fetcher.close()
+                    
+                    df_recent = recent_data.to_dataframe()
+                    
+                    # 只保留 HF 数据之后的部分
+                    df_recent = df_recent[df_recent.index > df.index.max()]
+                    
+                    if not df_recent.empty:
+                        logger.info(f"   新增 {len(df_recent)} 条最新数据")
+                        df = pd.concat([df, df_recent]).sort_index()
+                    
+            else:
+                logger.warning("⚠️ HF数据加载失败，回退到 CoinGecko")
+                df = None
+                
+        except Exception as e:
+            logger.error(f"❌ HF数据加载异常: {e}")
+            df = None
     
-    # 使用 CoinGecko 数据
-    fetcher = CoinGeckoFetcher()
-    cache = CacheManager()
-    
-    logger.info("从 CoinGecko 获取90天小时数据...")
-    market_data = await fetcher.get_hourly_ohlcv(
-        symbol="bitcoin",
-        vs_currency="usd",
-        days=90  # 90天数据，约2160条
-    )
-    
-    # 转换为DataFrame
-    df = market_data.to_dataframe()
-    logger.info(f"原始数据: {len(df)} 条 (范围: {df.index.min()} ~ {df.index.max()})")
+    # 如果没有使用HF或HF加载失败，使用 CoinGecko
+    if df is None or df.empty:
+        logger.info("📊 使用 CoinGecko 获取90天小时数据...")
+        fetcher = CoinGeckoFetcher()
+        
+        market_data = await fetcher.get_hourly_ohlcv(
+            symbol="bitcoin",
+            vs_currency="usd",
+            days=90  # 90天数据，约2160条
+        )
+        
+        # 转换为DataFrame
+        df = market_data.to_dataframe()
+        logger.info(f"原始数据: {len(df)} 条 (范围: {df.index.min()} ~ {df.index.max()})")
+        
+        await fetcher.close()
     
     # 确保时区一致
     if df.index.tz is None:
@@ -73,7 +111,6 @@ async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
     else:
         df.index = df.index.tz_convert('UTC')
     
-    await fetcher.close()
     return df
 
 
