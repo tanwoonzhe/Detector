@@ -212,8 +212,8 @@ def create_price_chart(df: pd.DataFrame) -> go.Figure:
                       line=dict(color='cyan', width=1)),
             row=3, col=1
         )
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+        fig.add_hline(y=70, line_dash="dash", line_color="red", row="3", col="1")
+        fig.add_hline(y=30, line_dash="dash", line_color="green", row="3", col="1")
     
     fig.update_layout(
         title='BTC/USDT 实时行情',
@@ -309,6 +309,10 @@ def main():
         chart_placeholder = st.empty()
     
     with col_info:
+        # 初始化placeholders
+        sentiment_placeholder = None
+        tech_placeholder = None
+        
         if show_sentiment:
             st.subheader("💭 市场情感")
             sentiment_placeholder = st.empty()
@@ -361,7 +365,8 @@ def main():
                 "BB上": f"${latest['bb_upper']:.2f}" if not pd.isna(latest['bb_upper']) else "N/A",
                 "BB下": f"${latest['bb_lower']:.2f}" if not pd.isna(latest['bb_lower']) else "N/A"
             }
-            tech_placeholder.json(tech_data)
+            if tech_placeholder is not None:
+                tech_placeholder.json(tech_data)
         
         # 情感
         if show_sentiment and 'rsi' in df.columns:
@@ -374,10 +379,11 @@ def main():
                 else:
                     sentiment_score = (rsi - 50) / 100
                 
-                sentiment_placeholder.plotly_chart(
-                    create_sentiment_gauge(sentiment_score),
-                    use_container_width=True
-                )
+                if sentiment_placeholder is not None:
+                    sentiment_placeholder.plotly_chart(
+                        create_sentiment_gauge(sentiment_score),
+                        use_container_width=True
+                    )
         
         # 状态
         status_placeholder.success("✅ 数据加载成功")

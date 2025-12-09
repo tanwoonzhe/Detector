@@ -64,8 +64,21 @@ def get_api():
     return BinancePublicAPI()
 
 
-async def fetch_realtime_data():
-    """获取实时数据"""
+def fetch_realtime_data_sync():
+    """获取实时数据（同步版本）"""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(_fetch_realtime_data())
+        loop.close()
+        return result
+    except Exception as e:
+        st.error(f"获取数据失败: {e}")
+        return None, None
+
+
+async def _fetch_realtime_data():
+    """内部异步获取实时数据"""
     api = get_api()
     
     # 并行获取多个数据
@@ -77,10 +90,18 @@ async def fetch_realtime_data():
     return price_data, ticker_data
 
 
-async def fetch_klines(interval: str, days: int):
-    """获取 K 线数据"""
-    api = get_api()
-    return await api.get_klines("BTCUSDT", interval, days)
+def fetch_klines_sync(interval: str, days: int):
+    """获取 K 线数据（同步版本）"""
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        api = get_api()
+        result = loop.run_until_complete(api.get_klines("BTCUSDT", interval, days))
+        loop.close()
+        return result
+    except Exception as e:
+        st.error(f"获取K线数据失败: {e}")
+        return pd.DataFrame()
 
 
 def calculate_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
@@ -226,7 +247,11 @@ def main():
     
     # 获取实时数据
     try:
-        price_data, ticker_data = asyncio.run(fetch_realtime_data())
+        price_data, ticker_data = fetch_realtime_data_sync()
+        
+        if ticker_data is None or price_data is None:
+            st.error("无法获取实时数据，请稍后重试")
+            return
         
         # 显示实时价格
         col1, col2, col3, col4 = st.columns(4)
@@ -269,7 +294,7 @@ def main():
         st.subheader("📊 价格走势图")
         
         with st.spinner("正在加载K线数据..."):
-            df = asyncio.run(fetch_klines(kline_interval, history_days))
+            df = fetch_klines_sync(kline_interval, history_days)
             
             if not df.empty:
                 # 计算技术指标

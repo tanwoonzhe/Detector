@@ -108,13 +108,21 @@ class FeatureEngineer:
             df['sentiment_momentum'] = 0
         
         # 清理与填充
+        # 先检查是否有inf值
+        inf_counts = np.isinf(df.select_dtypes(include=[np.number])).sum()
+        if inf_counts.sum() > 0:
+            logger.warning(f"  发现 inf 值: {inf_counts[inf_counts > 0].to_dict()}")
+        
         df = df.replace([np.inf, -np.inf], np.nan)
         initial_len = len(df)
         
         # 统计每列的缺失值
         nan_counts = df.isna().sum()
         if nan_counts.sum() > 0:
-            logger.info(f"  NaN 统计: {nan_counts[nan_counts > 0].to_dict()}")
+            logger.info(f"  NaN 统计 (前10个): {dict(list(nan_counts[nan_counts > 0].items())[:10])}")
+            if nan_counts.sum() > len(df) * 0.9:  # 如果超过90%的数据是NaN
+                logger.error(f"  警告: 大量 NaN 值，可能数据质量有问题")
+                logger.error(f"  受影响最严重的列: {nan_counts.nlargest(5).to_dict()}")
         
         # 先用前向/后向填充，尽量保留样本，再做 dropna 去除仍缺失的行
         df = df.ffill().bfill()
@@ -124,9 +132,12 @@ class FeatureEngineer:
         if len(df) == 0:
             logger.error("特征工程后数据为空！")
             logger.error(f"初始行数: {initial_len}，删除行数: {dropped}，剩余: {len(df)}")
+            logger.error(f"原始数据列: {ohlcv_df.columns.tolist()}")
+            logger.error(f"特征工程后列数: {len(df.columns)}")
             raise ValueError(
-                f"特征工程后数据为空。初始数据: {initial_len} 行，删除了 {dropped} 行。"
-                f"检查是否需要更多历史数据（建议至少90天）或调整窗口大小。"
+                f"特征工程后数据为空。初始数据: {initial_len} 行，删除了 {dropped} 行。\n"
+                f"可能原因: 1) 数据不足（需要90天以上） 2) 计算指标时产生了大量 NaN/inf。\n"
+                f"请检查上面的 NaN 统计信息。"
             )
 
         logger.info(f"  移除 {dropped} 行含NaN的数据，剩余 {len(df)} 行")

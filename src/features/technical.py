@@ -191,9 +191,13 @@ class TechnicalIndicators:
         df['obv_change'] = df['obv'].pct_change()
         
         # VWAP (Volume Weighted Average Price)
-        # ta库的VWAP需要特殊处理
+        # 使用滚动窗口计算避免累积和过大
         typical_price = (high + low + close) / 3
-        df['vwap'] = (typical_price * volume).cumsum() / volume.cumsum()
+        vwap_window = 24  # 24小时窗口
+        df['vwap'] = (
+            (typical_price * volume).rolling(window=vwap_window).sum() / 
+            volume.rolling(window=vwap_window).sum()
+        )
         
         # 价格相对VWAP位置
         df['price_vwap_ratio'] = close / df['vwap']
