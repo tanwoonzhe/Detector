@@ -124,8 +124,20 @@ class FeatureEngineer:
                 logger.error(f"  警告: 大量 NaN 值，可能数据质量有问题")
                 logger.error(f"  受影响最严重的列: {nan_counts.nlargest(5).to_dict()}")
         
-        # 先用前向/后向填充，尽量保留样本，再做 dropna 去除仍缺失的行
+        # 多步骤填充策略，尽量保留样本
+        # 1. 前向/后向填充时间序列数据
         df = df.ffill().bfill()
+        
+        # 2. 对剩余 NaN 使用中位数填充（避免全部删除）
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_cols:
+            if df[col].isna().any():
+                median_val = df[col].median()
+                if pd.isna(median_val):
+                    median_val = 0  # 如果中位数也是 NaN，使用 0
+                df[col] = df[col].fillna(median_val)
+        
+        # 3. 只删除仍然有缺失的行（应该很少或没有）
         df = df.dropna()
         dropped = initial_len - len(df)
 

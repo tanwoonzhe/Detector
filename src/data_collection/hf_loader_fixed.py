@@ -39,16 +39,12 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             return pd.DataFrame()
         
         # 使用 streaming=False 避免卡在 Resolving data files
-        # 使用 download_mode="force_reuse" 强制重用已下载的数据，跳过解析步骤
         try:
-            print("加载 HuggingFace 数据集 (使用缓存)...")
+            print("加载 HuggingFace 数据集...")
             ds = load_dataset(
                 "WinkingFace/CryptoLM-Bitcoin-BTC-USDT", 
                 split="train",
-                streaming=False,
-                download_mode="force_reuse",  # 强制使用缓存，跳过解析
-                trust_remote_code=True,
-                verification_mode="no_checks"  # 跳过校验，加速加载
+                streaming=False
             )
             print("✅ 数据集加载成功，正在转换为 DataFrame...")
             df = ds.to_pandas()  # type: ignore

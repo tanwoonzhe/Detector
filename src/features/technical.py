@@ -97,10 +97,16 @@ class TechnicalIndicators:
         )
         
         # ADX (Average Directional Index) - 趋势强度
-        adx = ADXIndicator(df['high'], df['low'], close, window=14)
-        df['adx'] = adx.adx()
-        df['adx_pos'] = adx.adx_pos()
-        df['adx_neg'] = adx.adx_neg()
+        # 只在数据量足够时计算
+        if len(df) >= 14:
+            adx = ADXIndicator(df['high'], df['low'], close, window=14)
+            df['adx'] = adx.adx()
+            df['adx_pos'] = adx.adx_pos()
+            df['adx_neg'] = adx.adx_neg()
+        else:
+            df['adx'] = 0
+            df['adx_pos'] = 0
+            df['adx_neg'] = 0
         
         # 趋势方向
         df['trend_direction'] = np.where(
@@ -194,13 +200,12 @@ class TechnicalIndicators:
         # 使用滚动窗口计算避免累积和过大
         typical_price = (high + low + close) / 3
         vwap_window = 24  # 24小时窗口
-        df['vwap'] = (
-            (typical_price * volume).rolling(window=vwap_window).sum() / 
-            volume.rolling(window=vwap_window).sum()
-        )
+        vwap_numerator = (typical_price * volume).rolling(window=vwap_window, min_periods=1).sum()
+        vwap_denominator = volume.rolling(window=vwap_window, min_periods=1).sum()
+        df['vwap'] = vwap_numerator / vwap_denominator.replace(0, np.nan)
         
-        # 价格相对VWAP位置
-        df['price_vwap_ratio'] = close / df['vwap']
+        # 价格相对VWAP位置（避免除以0）
+        df['price_vwap_ratio'] = close / df['vwap'].replace(0, np.nan)
         
         # 成交量变化
         for period in [1, 6, 12, 24]:
