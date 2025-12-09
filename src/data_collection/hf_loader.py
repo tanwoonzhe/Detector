@@ -57,19 +57,22 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
             lc = col.lower()
             if lc in ["ts", "time", "timestamp", "date"]:
                 rename_map[col] = "timestamp"
-            elif "open" in lc:
+            elif lc == "open":
                 rename_map[col] = "open"
-            elif "high" in lc:
+            elif lc == "high":
                 rename_map[col] = "high"
-            elif "low" in lc:
+            elif lc == "low":
                 rename_map[col] = "low"
-            elif "close" in lc or lc == "price":
+            elif lc in ["close", "price"]:
                 rename_map[col] = "close"
-            elif "volume" in lc or "vol" in lc:
+            elif lc in ["volume", "vol"]:
                 rename_map[col] = "volume"
         
         df = df.rename(columns=rename_map)  # type: ignore
-        
+
+        base_cols = [c for c in ["timestamp", "open", "high", "low", "close", "volume"] if c in df.columns]
+        df = df[base_cols]
+
         # 确保必要列存在
         required = {"timestamp", "open", "high", "low", "close"}
         if not required.issubset(df.columns):
