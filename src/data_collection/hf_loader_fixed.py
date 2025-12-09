@@ -90,11 +90,13 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         print("重采样中，请稍候...")
         
         # 使用agg方法进行重采样（更稳定的方法）
+        # 注意: pandas 2.3.x 中 agg 使用字符串 'first' 会调用 Series.first 需要 offset
+        # 为避免 "missing required positional argument: 'offset'"，改用 lambda 取首/尾值
         agg_dict = {
-            'open': 'first',
+            'open': lambda s: s.iloc[0] if len(s) else None,
             'high': 'max',
             'low': 'min',
-            'close': 'last'
+            'close': lambda s: s.iloc[-1] if len(s) else None
         }
         
         if "volume" in df.columns:
