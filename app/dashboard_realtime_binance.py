@@ -19,10 +19,14 @@ from datetime import datetime, timedelta
 import asyncio
 import sys
 from pathlib import Path
+import torch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.data_collection.binance_public import BinancePublicAPI
+from src.features.engineer import FeatureEngineer
+from src.models.gru import GRUPredictor
+from src.models.lightgbm_model import LightGBMPredictor
 
 st.set_page_config(
     page_title="BTC实时价格监控",
@@ -54,11 +58,112 @@ st.markdown("""
         border-radius: 10px;
         margin: 10px 0;
     }
+    .prediction-box {
+        padding: 20px;
+        border-radius: 10px;
+        margin: 10px 0;
+        text-align: center;
+    }
+    .pred-bullish {
+        background: linear-gradient(135deg, #00ff00 0%, #00cc00 100%);
+        color: white;
+        font-size: 24px;
+        font-weight: bold;
+    }
+    .pred-bearish {
+        background: linear-gradient(135deg, #ff0000 0%, #cc0000 100%);
+        color: white;
+        font-size: 24px;
+        font-weight: bold;
+    }
+    .pred-neutral {
+        background: linear-gradient(135deg, #ffaa00 0%, #ff8800 100%);
+        color: white;
+        font-size: 24px;
+        font-weight: bold;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 
 # 不要缓存 API 实例，因为它包含 aiohttp session 会绑定到特定的事件循环
+
+
+@st.cache_resource
+def load_model(model_type: str):
+    """加载训练好的模型"""
+    try:
+        model_dir = Path(__file__).parent.parent / "models" / "saved"
+        
+        if model_type == "GRU":
+            model_path = model_dir / "gru_best.pth"
+            if not model_path.exists():
+                return None
+            model = GRUPredictor(
+                name="GRU",
+                device="cuda" if torch.cuda.is_available() else "cpu",
+                hidden_size=128,
+                num_layers=2,
+                dropout=0.3
+            )
+        elif model_type == "LightGBM":
+            model_path = model_dir / "lightgbm_best.txt"
+            if not model_path.exists():
+                return None
+            model = LightGBMPredictor(name="LightGBM")
+        else:
+            return None
+        
+        model.load(model_path)
+        return model
+    except Exception as e:
+        st.error(f"模型加载失败: {e}")
+        return None
+
+
+@st.cache_resource
+def get_feature_engineer():
+    """获取特征工程器"""
+    return FeatureEngineer()
+
+
+def make_prediction(model, df):
+    """使用模型进行预测"""
+    try:
+        if model is None or df is None or df.empty:
+            return None, None
+        
+        # 生成特征
+        engineer = get_feature_engineer()
+        df_features = engineer.create_features(df)
+        
+        if df_features.empty:
+            return None, None
+        
+        # 准备最近的数据
+        window_size = 24  # 使用最近24小时数据
+        if len(df_features) < window_size:
+            return None, None
+        
+        # 获取最近的特征
+        recent_data = df_features.iloc[-window_size:].values
+        
+        # 标准化（简单版本）
+        mean = recent_data.mean(axis=0)
+        std = recent_data.std(axis=0) + 1e-8
+        X = (recent_data - mean) / std
+        
+        # 为GRU重塑形状 (1, window_size, features)
+        X = X.reshape(1, window_size, -1)
+        
+        # 预测
+        pred_proba = model.predict_proba(X)
+        pred_class = model.predict(X)
+        
+        return pred_class[0], pred_proba[0]
+    except Exception as e:
+        st.error(f"预测失败: {e}")
+        return None, None
 
 
 @st.cache_resource
@@ -248,6 +353,16 @@ def main():
     # 侧边栏设置
     st.sidebar.header("⚙️ 设置")
     
+    # 模型选择
+    enable_prediction = st.sidebar.checkbox("🤖 启用 AI 预测", value=False)
+    model_type = None
+    if enable_prediction:
+        model_type = st.sidebar.selectbox(
+            "选择预测模型",
+            ["GRU", "LightGBM"],
+            index=0
+        )
+    
     # 刷新间隔
     refresh_interval = st.sidebar.selectbox(
         "自动刷新间隔",
@@ -279,6 +394,18 @@ def main():
     if st.sidebar.button("🔄 立即刷新"):
         st.cache_data.clear()
         st.rerun()
+    
+    st.sidebar.markdown("---")
+    if enable_prediction:
+        st.sidebar.info("💡 提示: 预测功能需要先训练模型")
+    
+    # 加载模型
+    model = None
+    if enable_prediction and model_type:
+        with st.spinner(f"加载 {model_type} 模型..."):
+            model = load_model(model_type)
+            if model is None:
+                st.sidebar.warning(f"⚠️ {model_type} 模型未找到")
     
     # 获取实时数据
     try:
@@ -323,6 +450,71 @@ def main():
             st.metric("24h 成交量 (BTC)", f"{ticker_data['volume']:,.2f}")
         with col6:
             st.metric("24h 成交额 (USDT)", f"${ticker_data['quote_volume']:,.0f}")
+        
+        # AI 预测区域
+        if model is not None:
+            st.markdown("---")
+            st.header("🎯 AI 趋势预测")
+            
+            # 获取足够的历史数据用于预测
+            with st.spinner("正在获取数据并生成预测..."):
+                df_pred = fetch_klines_sync("1h", 7)  # 7天小时数据
+                
+                if not df_pred.empty:
+                    pred_class, pred_proba = make_prediction(model, df_pred)
+                    
+                    if pred_class is not None and pred_proba is not None:
+                        col1, col2 = st.columns([1, 2])
+                        
+                        with col1:
+                            # 预测结果
+                            labels = ["看跌 📉", "震荡 ➡️", "看涨 📈"]
+                            colors = ["pred-bearish", "pred-neutral", "pred-bullish"]
+                            
+                            st.markdown(
+                                f'<div class="prediction-box {colors[pred_class]}">'
+                                f'{labels[pred_class]}<br>'
+                                f'置信度: {pred_proba[pred_class]*100:.1f}%'
+                                f'</div>',
+                                unsafe_allow_html=True
+                            )
+                            
+                            # 建议
+                            if pred_class == 2:  # 看涨
+                                st.success("💡 建议: 考虑买入或持有")
+                            elif pred_class == 0:  # 看跌
+                                st.error("💡 建议: 考虑卖出或观望")
+                            else:  # 震荡
+                                st.warning("💡 建议: 保持观望，等待明确信号")
+                        
+                        with col2:
+                            # 概率分布图
+                            fig_prob = go.Figure(data=[
+                                go.Bar(
+                                    x=labels,
+                                    y=pred_proba * 100,
+                                    marker=dict(
+                                        color=['#ff4444', '#ffaa00', '#44ff44'],
+                                        line=dict(color='white', width=2)
+                                    ),
+                                    text=[f'{p*100:.1f}%' for p in pred_proba],
+                                    textposition='auto',
+                                )
+                            ])
+                            
+                            fig_prob.update_layout(
+                                title="预测概率分布",
+                                xaxis_title="趋势方向",
+                                yaxis_title="概率 (%)",
+                                height=300,
+                                template="plotly_dark"
+                            )
+                            
+                            st.plotly_chart(fig_prob, use_container_width=True)
+                    else:
+                        st.warning("⚠️ 数据不足，无法进行预测")
+                else:
+                    st.warning("⚠️ 无法获取历史数据")
         
         # 获取 K 线数据
         st.markdown("---")
