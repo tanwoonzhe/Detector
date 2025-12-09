@@ -190,8 +190,9 @@ def create_price_chart(df: pd.DataFrame):
         )
         
         # RSI 超买超卖线
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row="2", col="1")
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row="2", col="1")
+        # Note: Plotly's add_hline expects string for row/col in subplots
+        fig.add_hline(y=70, line_dash="dash", line_color="red")
+        fig.add_hline(y=30, line_dash="dash", line_color="green")
     
     fig.update_layout(
         title="BTC/USDT 实时走势",
