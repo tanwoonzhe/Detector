@@ -205,6 +205,7 @@ class GRUPredictor(PyTorchPredictor):
         """
         seq_len, n_features = input_shape
         self.n_classes = n_classes
+        self.input_shape = input_shape  # 保存输入形状
         
         self.model = GRUAttentionNet(
             input_size=n_features,

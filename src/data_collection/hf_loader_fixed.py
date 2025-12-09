@@ -92,19 +92,19 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         # 使用更简单的重采样方式
         df_resampled = df.resample("h")
         
-        # 分别获取每个列的值
+        # 分别获取每个列的值并创建 DataFrame
         open_vals = df_resampled["open"].first()
         high_vals = df_resampled["high"].max()
         low_vals = df_resampled["low"].min()
         close_vals = df_resampled["close"].last()
         
-        # 使用 concat 创建 DataFrame 避免赋值错误
-        df_hourly = pd.concat([
-            open_vals.rename('open'),
-            high_vals.rename('high'),
-            low_vals.rename('low'),
-            close_vals.rename('close')
-        ], axis=1)
+        # 使用字典创建 DataFrame（最稳定的方法）
+        df_hourly = pd.DataFrame({
+            'open': open_vals.values,
+            'high': high_vals.values,
+            'low': low_vals.values,
+            'close': close_vals.values
+        }, index=open_vals.index)
         
         if "volume" in df.columns:
             df_hourly["volume"] = df_resampled["volume"].sum()

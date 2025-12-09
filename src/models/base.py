@@ -108,6 +108,7 @@ class PyTorchPredictor(BasePredictor):
         self.model: Optional[nn.Module] = None
         self.optimizer = None
         self.criterion = None
+        self.input_shape: Optional[Tuple[int, ...]] = None  # 保存输入形状
         self.scheduler = None
         self.history = {'train_loss': [], 'val_loss': [], 'train_acc': [], 'val_acc': []}
         
@@ -250,6 +251,8 @@ class PyTorchPredictor(BasePredictor):
     
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         """预测概率"""
+        if self.model is None:
+            raise RuntimeError("模型未构建！请先调用 build() 方法")
         if not self._is_trained:
             raise ValueError("模型未训练")
         
@@ -270,14 +273,22 @@ class PyTorchPredictor(BasePredictor):
     
     def save(self, path: Path) -> None:
         """保存模型"""
+        if self.model is None:
+            raise RuntimeError("模型未构建！无法保存")
+        
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 保存配置（包含输入形状）
+        save_config = self.config.copy() if isinstance(self.config, dict) else {}
+        if hasattr(self, 'input_shape'):
+            save_config['input_shape'] = self.input_shape
         
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict() if self.optimizer else None,
             'history': self.history,
-            'config': self.config
+            'config': save_config
         }, path)
         logger.info(f"模型已保存: {path}")
     
@@ -285,6 +296,10 @@ class PyTorchPredictor(BasePredictor):
         """加载模型"""
         path = Path(path)
         checkpoint = torch.load(path, map_location=self.device)
+        
+        # 确保模型已构建
+        if self.model is None:
+            raise RuntimeError("模型未构建！请先调用 build() 方法")
         
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.history = checkpoint.get('history', {})
