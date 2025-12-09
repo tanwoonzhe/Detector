@@ -356,25 +356,29 @@ def main():
         model, _ = train_gru(X_train, y_train, X_val, y_val)
         models['gru'] = model
         evaluate_model(model, X_test, y_test, 'GRU')
-        model.save(model_dir / 'gru_model.pt')
+        model.save(model_dir / 'gru_best.pth')  # 修正为 dashboard 期望的名称
+        logger.info(f"✅ GRU 模型已保存到: {model_dir / 'gru_best.pth'}")
     
     if args.model in ['bilstm', 'all']:
         model, _ = train_bilstm(X_train, y_train, X_val, y_val)
         models['bilstm'] = model
         evaluate_model(model, X_test, y_test, 'BiLSTM')
-        model.save(model_dir / 'bilstm_model.pt')
+        model.save(model_dir / 'bilstm_best.pth')
+        logger.info(f"✅ BiLSTM 模型已保存到: {model_dir / 'bilstm_best.pth'}")
     
     if args.model in ['cnn_lstm', 'all']:
         model, _ = train_cnn_lstm(X_train, y_train, X_val, y_val)
         models['cnn_lstm'] = model
         evaluate_model(model, X_test, y_test, 'CNN-LSTM')
-        model.save(model_dir / 'cnn_lstm_model.pt')
+        model.save(model_dir / 'cnn_lstm_best.pth')
+        logger.info(f"✅ CNN-LSTM 模型已保存到: {model_dir / 'cnn_lstm_best.pth'}")
     
     if args.model in ['lightgbm', 'all']:
         model, _ = train_lightgbm(X_train, y_train, X_val, y_val)
         models['lightgbm'] = model
         evaluate_model(model, X_test, y_test, 'LightGBM')
-        model.save(model_dir / 'lightgbm_model.pkl')
+        model.save(model_dir / 'lightgbm_best.txt')  # 修正为 dashboard 期望的名称
+        logger.info(f"✅ LightGBM 模型已保存到: {model_dir / 'lightgbm_best.txt'}")
     
     # 集成模型
     if args.model == 'all' and len(models) > 1:

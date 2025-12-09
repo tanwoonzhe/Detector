@@ -210,10 +210,11 @@ class TechnicalIndicators:
         # 成交量变化
         for period in [1, 6, 12, 24]:
             df[f'volume_change_{period}'] = volume.pct_change(period)
-            df[f'volume_sma_{period}'] = volume.rolling(window=period).mean()
+            df[f'volume_sma_{period}'] = volume.rolling(window=period, min_periods=1).mean()
         
-        # 成交量比率 (当前成交量/平均成交量)
-        df['volume_ratio'] = volume / volume.rolling(window=24).mean()
+        # 成交量比率 (当前成交量/平均成交量)，避免除以0
+        volume_ma24 = volume.rolling(window=24, min_periods=1).mean()
+        df['volume_ratio'] = volume / volume_ma24.replace(0, np.nan)
         
         return df
     

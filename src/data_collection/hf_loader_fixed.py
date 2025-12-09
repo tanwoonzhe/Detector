@@ -89,15 +89,28 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         # 使用更快的重采样方法
         print("重采样中，请稍候...")
         
-        # 使用 nth 方法代替 first/last 避免 offset问题
+        # 使用更简单的重采样方式
         df_resampled = df.resample("h")
-        df_hourly = pd.DataFrame({
-            "open": df_resampled["open"].first(),
-            "high": df_resampled["high"].max(),
-            "low": df_resampled["low"].min(),
-            "close": df_resampled["close"].last(),
-            "volume": df_resampled["volume"].sum() if "volume" in df.columns else 0
-        }).dropna()
+        
+        # 分别获取每个列的值
+        open_vals = df_resampled["open"].first()
+        high_vals = df_resampled["high"].max()
+        low_vals = df_resampled["low"].min()
+        close_vals = df_resampled["close"].last()
+        
+        # 创建 DataFrame
+        df_hourly = pd.DataFrame(index=open_vals.index)
+        df_hourly["open"] = open_vals
+        df_hourly["high"] = high_vals
+        df_hourly["low"] = low_vals
+        df_hourly["close"] = close_vals
+        
+        if "volume" in df.columns:
+            df_hourly["volume"] = df_resampled["volume"].sum()
+        else:
+            df_hourly["volume"] = 0
+        
+        df_hourly = df_hourly.dropna()
         
         print(f"✅ 重采样完成，得到 {len(df_hourly)} 条小时数据")
         
