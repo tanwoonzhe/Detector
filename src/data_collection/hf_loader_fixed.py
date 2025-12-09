@@ -82,6 +82,11 @@ def load_hf_btc_data(cache_path: Optional[Path] = None) -> pd.DataFrame:
         required = {"timestamp", "open", "high", "low", "close"}
         if not required.issubset(df.columns):
             raise ValueError(f"HF数据集缺少必要列。当前列: {df.columns.tolist()}")
+
+        # 转换数值列为浮点，过滤异常字符串/对象，防止聚合后写 parquet 失败
+        for col in ["open", "high", "low", "close", "volume"]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
         
         # 时间戳处理
         df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
