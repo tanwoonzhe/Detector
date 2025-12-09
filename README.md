@@ -61,6 +61,8 @@ venv\Scripts\activate  # Windows
 source venv/bin/activate  # Linux/Mac
 ```
 
+ssh -p 22524 -L 8501:localhost:8501 root@58.242.92.4
+
 2. 安装依赖:
 ```bash
 pip install -r requirements.txt
@@ -74,14 +76,31 @@ copy .env.example .env
 
 ## 🎯 使用方法
 
+### 快速开始（推荐）
+
+```bash
+# 使用交互式菜单
+python menu.py
+```
+
 ### 训练模型
 
 ```bash
-# 训练GRU模型
-python main.py --train --model gru --epochs 100
+# 方法1: 使用 train.py（推荐）
+python train.py --model gru --epochs 100
 
-# 训练所有模型
-python main.py --train --model all --epochs 50
+# 方法2: 训练所有模型
+python train.py --model all --epochs 50
+
+# 方法3: 使用 main.py（旧方式）
+python main.py --train --model gru --epochs 100
+```
+
+### 测试训练流程
+
+```bash
+# 测试数据和特征工程是否正常
+python test_training_pipeline.py
 ```
 
 ### 启动Dashboard

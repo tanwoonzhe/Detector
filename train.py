@@ -21,7 +21,7 @@ import pandas as pd
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import ModelConfig, TradingConfig
+from config import ModelConfig, TradingConfig, FeatureConfig
 from src.data_collection import CacheManager
 from src.data_collection.coingecko_fetcher import CoinGeckoFetcher
 from src.sentiment import SentimentAggregator
@@ -47,42 +47,31 @@ async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
     """获取训练数据"""
     logger.info("获取历史数据...")
     
+    # 暂时只使用 CoinGecko 数据（稳定可靠）
+    # HF 数据集有时区问题，需要单独修复
     if use_hf:
-        logger.info("使用 HuggingFace 数据集...")
-        try:
-            from src.data_collection.hf_loader_fixed import load_hf_btc_data
-            df = load_hf_btc_data()
-            logger.info(f"HF数据: {len(df)} 条记录")
-            
-            if merge_recent:
-                logger.info("合并最新 CoinGecko 数据...")
-                fetcher = CoinGeckoFetcher()
-                recent_data = await fetcher.get_hourly_ohlcv(
-                    symbol="bitcoin",
-                    vs_currency="usd",
-                    days=7
-                )
-                recent_df = recent_data.to_dataframe()
-                df = pd.concat([df, recent_df]).drop_duplicates().sort_index()
-                logger.info(f"合并后: {len(df)} 条记录")
-            
-            return df
-        except Exception as e:
-            logger.error(f"HF数据加载失败: {e}，切换到 CoinGecko")
+        logger.warning("HF数据集功能正在修复中，使用 CoinGecko 数据")
     
     # 使用 CoinGecko 数据
     fetcher = CoinGeckoFetcher()
     cache = CacheManager()
     
+    logger.info("从 CoinGecko 获取90天小时数据...")
     market_data = await fetcher.get_hourly_ohlcv(
         symbol="bitcoin",
         vs_currency="usd",
-        days=90  # 90天数据
+        days=90  # 90天数据，约2160条
     )
     
     # 转换为DataFrame
     df = market_data.to_dataframe()
-    logger.info(f"获取到 {len(df)} 条价格数据")
+    logger.info(f"原始数据: {len(df)} 条 (范围: {df.index.min()} ~ {df.index.max()})")
+    
+    # 确保时区一致
+    if df.index.tz is None:
+        df.index = df.index.tz_localize('UTC')
+    else:
+        df.index = df.index.tz_convert('UTC')
     
     await fetcher.close()
     return df
@@ -90,12 +79,20 @@ async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
 
 def prepare_data(df: pd.DataFrame):
     """准备训练数据"""
-    logger.info("特征工程...")
+    logger.info(f"特征工程开始... 初始数据: {len(df)} 行")
     
     engineer = FeatureEngineer()
     
     # 创建特征
     df_features = engineer.create_features(df)
+    logger.info(f"特征创建后: {len(df_features)} 行")
+    
+    if len(df_features) < 100:
+        logger.error(f"特征工程后数据不足: {len(df_features)} 行 < 100 行最小要求")
+        raise ValueError(
+            f"特征工程后仅剩 {len(df_features)} 行数据，不足以训练。"
+            f"建议：1) 使用更多天数的数据 2) 减小特征窗口大小"
+        )
     
     # 创建标签
     df_features = engineer.create_labels(df_features)

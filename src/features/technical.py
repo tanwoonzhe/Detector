@@ -198,13 +198,13 @@ class TechnicalIndicators:
         # 价格相对VWAP位置
         df['price_vwap_ratio'] = close / df['vwap']
         
-        # 成交量变化
-        for period in [1, 6, 12, 24]:
+        # 成交量变化（减小窗口）
+        for period in [1, 6, 12]:  # 原来 [1, 6, 12, 24]
             df[f'volume_change_{period}'] = volume.pct_change(period)
             df[f'volume_sma_{period}'] = volume.rolling(window=period).mean()
         
-        # 成交量比率 (当前成交量/平均成交量)
-        df['volume_ratio'] = volume / volume.rolling(window=24).mean()
+        # 成交量比率 (当前成交量/平均成交量) - 窗口从24改为12
+        df['volume_ratio'] = volume / volume.rolling(window=12).mean()
         
         return df
     
@@ -220,8 +220,8 @@ class TechnicalIndicators:
             df[f'return_{period}h'] = close.pct_change(period)
             df[f'log_return_{period}h'] = np.log(close / close.shift(period))
         
-        # 累计收益率
-        for period in [12, 24, 48]:
+        # 累计收益率（减小最大窗口从48到24）
+        for period in [12, 24]:  # 原来 [12, 24, 48]
             df[f'cum_return_{period}h'] = close.pct_change(period)
         
         return df

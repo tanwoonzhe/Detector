@@ -116,12 +116,15 @@ class FeatureConfig:
     BB_PERIOD = 20
     BB_STD = 2
     
-    # 移动平均周期
-    SMA_PERIODS = [7, 21, 50]
+    # 移动平均周期（减小最大窗口从 50 到 30 以保留更多数据）
+    SMA_PERIODS = [7, 14, 30]  # 原来 [7, 21, 50]
     EMA_PERIODS = [12, 26]
     
-    # 收益率回溯周期（小时）
-    RETURN_PERIODS = [1, 2, 4, 6, 12, 24]
+    # 收益率回溯周期（小时）- 减小最大周期
+    RETURN_PERIODS = [1, 2, 4, 6, 12]  # 原来 [1, 2, 4, 6, 12, 24]
+    
+    # 技术指标滚动窗口（用于多时间框架分析）
+    TECHNICAL_WINDOWS = [5, 10, 20, 30, 50]  # 最大50小时，避免数据损失
 
 # ===== 情感分析配置 =====
 class SentimentConfig:
