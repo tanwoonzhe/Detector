@@ -292,7 +292,8 @@ class FeatureEngineer:
         self, 
         X: np.ndarray, 
         y: np.ndarray,
-        show_progress: bool = True
+        show_progress: bool = True,
+        max_samples: Optional[int] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         创建序列数据 (用于RNN/LSTM/GRU)
@@ -301,6 +302,7 @@ class FeatureEngineer:
             X: 特征矩阵 (samples, features)
             y: 标签数组 (samples,)
             show_progress: 是否显示进度条
+            max_samples: 最大样本数（用于限制内存使用）
             
         Returns:
             (X_seq, y_seq) 
@@ -311,17 +313,56 @@ class FeatureEngineer:
         n_samples = len(X) - seq_len
         n_features = X.shape[1]
         
-        logger.info(f"  创建序列数据: {n_samples} 个样本, 序列长度={seq_len}, 特征数={n_features}")
+        # 计算预估内存使用量 (float32)
+        estimated_memory_gb = (n_samples * seq_len * n_features * 4) / (1024**3)
+        logger.info(f"  创建序列数据: {n_samples:,} 个样本, 序列长度={seq_len}, 特征数={n_features}")
+        logger.info(f"  预估内存需求: {estimated_memory_gb:.2f} GB")
         
-        # 使用向量化操作加速（比循环快很多）
-        logger.info(f"  使用向量化方法创建序列...")
+        # 如果内存需求过大，进行采样
+        if estimated_memory_gb > 8.0:  # 超过 8GB 时采样
+            # 计算安全的样本数（目标 6GB 内存）
+            safe_samples = int((6.0 * 1024**3) / (seq_len * n_features * 4))
+            if max_samples is None or safe_samples < max_samples:
+                max_samples = safe_samples
+            logger.warning(f"  ⚠️ 内存需求过大 ({estimated_memory_gb:.1f}GB)，将采样到 {max_samples:,} 个样本")
         
-        # 创建索引数组
-        indices = np.arange(n_samples)[:, None] + np.arange(seq_len)
+        # 应用最大样本限制
+        if max_samples is not None and n_samples > max_samples:
+            # 均匀采样以保留时间分布
+            step = n_samples // max_samples
+            sample_indices = np.arange(0, n_samples, step)[:max_samples]
+            n_samples = len(sample_indices)
+            logger.info(f"  采样后样本数: {n_samples:,}")
+        else:
+            sample_indices = None
         
-        # 一次性索引所有序列
-        X_seq = X[indices]  # (n_samples, seq_len, n_features)
-        y_seq = y[seq_len:seq_len + n_samples]
+        # 使用分批处理创建序列，避免一次性分配大内存
+        batch_size = min(50000, n_samples)  # 每批最多5万个样本
+        n_batches = (n_samples + batch_size - 1) // batch_size
+        
+        logger.info(f"  分 {n_batches} 批创建序列...")
+        
+        # 预分配输出数组
+        X_seq = np.zeros((n_samples, seq_len, n_features), dtype=np.float32)
+        y_seq = np.zeros(n_samples, dtype=y.dtype)
+        
+        iterator = range(n_batches)
+        if show_progress:
+            from tqdm import tqdm
+            iterator = tqdm(iterator, desc="  创建序列", unit="batch")
+        
+        for batch_idx in iterator:
+            start_idx = batch_idx * batch_size
+            end_idx = min((batch_idx + 1) * batch_size, n_samples)
+            
+            for i, seq_idx in enumerate(range(start_idx, end_idx)):
+                if sample_indices is not None:
+                    orig_idx = sample_indices[seq_idx]
+                else:
+                    orig_idx = seq_idx
+                
+                X_seq[seq_idx] = X[orig_idx:orig_idx + seq_len]
+                y_seq[seq_idx] = y[orig_idx + seq_len]
         
         logger.info(f"  ✅ 序列创建完成: X_seq={X_seq.shape}, y_seq={y_seq.shape}")
         
