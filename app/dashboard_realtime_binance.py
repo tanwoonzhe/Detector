@@ -27,6 +27,7 @@ from src.data_collection.binance_public import BinancePublicAPI
 from src.features.engineer import FeatureEngineer
 from src.models.gru import GRUPredictor
 from src.models.lightgbm_model import LightGBMPredictor
+from src.models.bilstm import BiLSTMPredictor
 
 st.set_page_config(
     page_title="BTC实时价格监控",
@@ -111,6 +112,19 @@ def load_model(model_type: str):
             # 使用auto_build自动从checkpoint读取配置并构建模型
             model.load(model_path, auto_build=True)
             
+        elif model_type == "BiLSTM":
+            model_path = model_dir / "bilstm_best.pth"
+            if not model_path.exists():
+                return None
+            
+            model = BiLSTMPredictor(
+                hidden_size=128,
+                num_layers=2,
+                dropout=0.3,
+                device="cuda" if torch.cuda.is_available() else "cpu"
+            )
+            model.load(model_path, auto_build=True)
+            
         elif model_type == "LightGBM":
             model_path = model_dir / "lightgbm_best.txt"
             if not model_path.exists():
@@ -145,13 +159,33 @@ def make_prediction(model, df):
         if df_features.empty:
             return None, None
         
+        # 获取特征列
+        feature_cols = engineer.get_feature_columns(df_features)
+        
+        # 检查模型期望的特征数
+        expected_features = None
+        if hasattr(model, 'input_shape') and model.input_shape is not None:
+            expected_features = model.input_shape[1]  # (seq_len, n_features)
+        elif hasattr(model, 'model') and hasattr(model.model, 'n_features_in_'):
+            expected_features = model.model.n_features_in_
+        
         # 准备最近的数据
         window_size = 24  # 使用最近24小时数据
         if len(df_features) < window_size:
             return None, None
         
         # 获取最近的特征
-        recent_data = df_features.iloc[-window_size:].values
+        recent_data = df_features[feature_cols].iloc[-window_size:].values
+        
+        # 如果特征数不匹配，进行调整
+        if expected_features is not None and recent_data.shape[1] != expected_features:
+            if recent_data.shape[1] > expected_features:
+                # 特征太多，截取前面的
+                recent_data = recent_data[:, :expected_features]
+            else:
+                # 特征太少，补零
+                padding = np.zeros((recent_data.shape[0], expected_features - recent_data.shape[1]))
+                recent_data = np.hstack([recent_data, padding])
         
         # 标准化（简单版本）
         mean = recent_data.mean(axis=0)
@@ -168,6 +202,8 @@ def make_prediction(model, df):
         return pred_class[0], pred_proba[0]
     except Exception as e:
         st.error(f"预测失败: {e}")
+        import traceback
+        st.code(traceback.format_exc())
         return None, None
 
 
@@ -364,7 +400,7 @@ def main():
     if enable_prediction:
         model_type = st.sidebar.selectbox(
             "选择预测模型",
-            ["GRU", "LightGBM"],
+            ["GRU", "BiLSTM", "LightGBM"],
             index=0
         )
     

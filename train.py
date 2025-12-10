@@ -73,8 +73,17 @@ async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
                     
                     df_recent = recent_data.to_dataframe()
                     
+                    # 统一时区处理：移除时区信息进行比较
+                    df_max_time = df.index.max()
+                    if hasattr(df_max_time, 'tz') and df_max_time.tz is not None:
+                        df_max_time = df_max_time.tz_localize(None)
+                    if hasattr(df_recent.index, 'tz') and df_recent.index.tz is not None:
+                        df_recent.index = df_recent.index.tz_localize(None)
+                    if hasattr(df.index, 'tz') and df.index.tz is not None:
+                        df.index = df.index.tz_localize(None)
+                    
                     # 只保留 HF 数据之后的部分
-                    df_recent = df_recent[df_recent.index > df.index.max()]
+                    df_recent = df_recent[df_recent.index > df_max_time]
                     
                     if not df_recent.empty:
                         logger.info(f"   新增 {len(df_recent)} 条最新数据")

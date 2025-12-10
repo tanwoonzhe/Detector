@@ -182,10 +182,16 @@ class LightGBMPredictor(BasePredictor):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         
+        # 获取输入特征数（用于预测时验证）
+        n_features_in = None
+        if self.model is not None and hasattr(self.model, 'n_features_in_'):
+            n_features_in = self.model.n_features_in_
+        
         joblib.dump({
             'model': self.model,
             'params': self.params,
-            'feature_importance': self.feature_importance
+            'feature_importance': self.feature_importance,
+            'n_features_in': n_features_in  # 保存特征数
         }, path)
         logger.info(f"LightGBM模型已保存: {path}")
     
@@ -197,6 +203,7 @@ class LightGBMPredictor(BasePredictor):
         self.model = data['model']
         self.params = data['params']
         self.feature_importance = data.get('feature_importance', {})
+        self._n_features_in = data.get('n_features_in', None)  # 加载特征数
         self._is_trained = True
         
         logger.info(f"LightGBM模型已加载: {path}")

@@ -147,6 +147,13 @@ class BiLSTMPredictor(PyTorchPredictor):
     def build(self, input_shape: Tuple[int, ...], n_classes: int = 3) -> None:
         """构建模型"""
         seq_len, n_features = input_shape
+        self.input_shape = input_shape  # 保存输入形状
+        self.n_classes = n_classes
+        
+        # 保存到config供save/load使用
+        if not isinstance(self.config, dict):
+            self.config = {}
+        self.config['n_classes'] = n_classes
         
         self.model = BiLSTMNet(
             input_size=n_features,
