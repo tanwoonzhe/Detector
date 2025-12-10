@@ -6,6 +6,8 @@
 使用方法:
     python train.py --model gru --epochs 100
     python train.py --model all --epochs 50
+    python train.py --model cnn_lstm --use-hf-multi --interval 15min --epochs 100
+    python train.py --use-binance-hist --interval 5min --days 365
 """
 
 import argparse
@@ -26,6 +28,10 @@ from src.data_collection import CacheManager
 from src.data_collection.coingecko_fetcher import CoinGeckoFetcher
 from src.data_collection.fmp_fetcher import FMPFetcher
 from src.data_collection.data_pipeline import DataPipeline
+from src.data_collection.binance_historical import BinanceHistoricalFetcher, download_btc_historical, load_btc_historical
+from src.data_collection.fred_fetcher import FREDFetcher
+from src.data_collection.kaggle_fetcher import KaggleFetcher, load_kaggle_btc
+from src.data_collection.hf_loader_multi import load_hf_btc_multi_granularity
 from src.sentiment import SentimentAggregator
 from src.features import FeatureEngineer
 from src.validation import WalkForwardValidator, TimeSeriesMetrics
@@ -52,23 +58,98 @@ async def fetch_data(
     fmp_days: int = 90,
     use_pipeline: bool = False,
     include_macro: bool = True,
-    include_onchain: bool = True
+    include_onchain: bool = True,
+    use_hf_multi: bool = False,
+    interval: str = "1h",
+    use_binance_hist: bool = False,
+    use_kaggle: bool = False,
+    days: int = 90
 ):
     """
     获取训练数据
     
     Args:
-        use_hf: 使用HuggingFace历史数据集
+        use_hf: 使用HuggingFace历史数据集（小时级）
         merge_recent: 合并最近的CoinGecko数据（与use_hf一起使用）
         use_fmp: 使用Financial Modeling Prep (FMP) API
         fmp_days: FMP数据天数
         use_pipeline: 使用多数据源管道（宏观+链上+跨市场）
         include_macro: 包含宏观数据（需要FMP API）
         include_onchain: 包含链上数据（CoinMetrics）
+        use_hf_multi: 使用多粒度HuggingFace数据
+        interval: 数据间隔 (1min, 5min, 15min, 30min, 1h, 4h, 1d)
+        use_binance_hist: 使用Binance历史归档数据
+        use_kaggle: 使用Kaggle历史数据
+        days: 获取数据的天数
     """
     logger.info("获取历史数据...")
     
     df = None
+    
+    # 选项A: 使用Binance历史归档数据（高优先级，最完整）
+    if use_binance_hist:
+        logger.info(f"📥 使用 Binance 历史归档数据 ({interval})...")
+        try:
+            # 先尝试加载本地缓存
+            df = load_btc_historical(interval=interval)
+            
+            if df is None or df.empty:
+                # 如果没有缓存，下载数据
+                logger.info("本地无缓存，开始下载Binance历史数据...")
+                df = asyncio.get_event_loop().run_until_complete(
+                    download_btc_historical(interval=interval)
+                )
+            
+            if df is not None and not df.empty:
+                logger.info(f"✅ Binance历史数据加载成功: {len(df)} 条记录")
+                logger.info(f"   时间范围: {df.index.min()} ~ {df.index.max()}")
+                logger.info(f"   数据间隔: {interval}")
+            else:
+                logger.warning("⚠️ Binance历史数据为空，回退到其他数据源")
+                df = None
+                
+        except Exception as e:
+            logger.error(f"❌ Binance历史数据加载异常: {e}")
+            logger.info("回退到其他数据源...")
+            df = None
+    
+    # 选项B: 使用多粒度HuggingFace数据
+    if df is None and use_hf_multi:
+        logger.info(f"📥 加载多粒度 HuggingFace 数据集 ({interval})...")
+        try:
+            df = load_hf_btc_multi_granularity(granularity=interval)
+            
+            if df is not None and not df.empty:
+                logger.info(f"✅ HF多粒度数据加载成功: {len(df)} 条记录")
+                logger.info(f"   时间范围: {df.index.min()} ~ {df.index.max()}")
+                logger.info(f"   数据间隔: {interval}")
+            else:
+                logger.warning("⚠️ HF多粒度数据为空，回退到其他数据源")
+                df = None
+                
+        except Exception as e:
+            logger.error(f"❌ HF多粒度数据加载异常: {e}")
+            logger.info("回退到其他数据源...")
+            df = None
+    
+    # 选项C: 使用Kaggle数据
+    if df is None and use_kaggle:
+        logger.info("📥 加载 Kaggle 历史数据...")
+        try:
+            resample_to = interval if interval in ["1min", "1h", "1d"] else "1h"
+            df = load_kaggle_btc(resample_to=resample_to)
+            
+            if df is not None and not df.empty:
+                logger.info(f"✅ Kaggle数据加载成功: {len(df)} 条记录")
+                logger.info(f"   时间范围: {df.index.min()} ~ {df.index.max()}")
+            else:
+                logger.warning("⚠️ Kaggle数据为空，回退到其他数据源")
+                df = None
+                
+        except Exception as e:
+            logger.error(f"❌ Kaggle数据加载异常: {e}")
+            logger.info("回退到其他数据源...")
+            df = None
     
     # 选项0: 使用多数据源管道
     if use_pipeline:
@@ -158,12 +239,14 @@ async def fetch_data(
                     
                     # 统一时区处理：移除时区信息进行比较
                     df_max_time = df.index.max()
-                    if hasattr(df_max_time, 'tz') and df_max_time.tz is not None:
+                    if isinstance(df.index, pd.DatetimeIndex):
+                        if df.index.tz is not None:
+                            df.index = df.index.tz_localize(None)  # type: ignore
+                    if isinstance(df_recent.index, pd.DatetimeIndex):
+                        if df_recent.index.tz is not None:
+                            df_recent.index = df_recent.index.tz_localize(None)  # type: ignore
+                    if isinstance(df_max_time, pd.Timestamp) and df_max_time.tz is not None:
                         df_max_time = df_max_time.tz_localize(None)
-                    if hasattr(df_recent.index, 'tz') and df_recent.index.tz is not None:
-                        df_recent.index = df_recent.index.tz_localize(None)
-                    if hasattr(df.index, 'tz') and df.index.tz is not None:
-                        df.index = df.index.tz_localize(None)
                     
                     # 只保留 HF 数据之后的部分
                     df_recent = df_recent[df_recent.index > df_max_time]
@@ -385,8 +468,10 @@ def main():
                        help='批次大小')
     parser.add_argument('--validate', action='store_true',
                        help='是否执行Walk-Forward验证')
+    
+    # === 传统数据源 ===
     parser.add_argument('--use-hf', action='store_true',
-                       help='使用HuggingFace历史数据集')
+                       help='使用HuggingFace历史数据集（小时级）')
     parser.add_argument('--merge-recent', action='store_true',
                        help='合并最近的CoinGecko数据（与--use-hf一起使用）')
     parser.add_argument('--use-fmp', action='store_true',
@@ -394,7 +479,20 @@ def main():
     parser.add_argument('--fmp-days', type=int, default=90,
                        help='数据天数（默认90天）')
     
-    # 多数据源管道参数
+    # === 新增长历史数据源 ===
+    parser.add_argument('--use-hf-multi', action='store_true',
+                       help='使用多粒度HuggingFace数据（支持1min/5min/15min/30min/1h/4h/1d）')
+    parser.add_argument('--use-binance-hist', action='store_true',
+                       help='使用Binance历史归档数据（2017至今，官方数据）')
+    parser.add_argument('--use-kaggle', action='store_true',
+                       help='使用Kaggle BTC历史数据（2012至今）')
+    parser.add_argument('--interval', type=str, default='1h',
+                       choices=['1min', '5min', '15min', '30min', '1h', '4h', '1d'],
+                       help='数据间隔/粒度（默认1h）')
+    parser.add_argument('--days', type=int, default=365,
+                       help='获取数据天数（默认365天）')
+    
+    # === 多数据源管道参数 ===
     parser.add_argument('--use-pipeline', action='store_true',
                        help='使用多数据源管道（合并宏观+链上+跨市场数据）')
     parser.add_argument('--include-macro', action='store_true', default=True,
@@ -421,7 +519,13 @@ def main():
     logger.info("="*50)
     
     # 显示数据源选择
-    if args.use_pipeline:
+    if args.use_binance_hist:
+        logger.info(f"📊 数据源: Binance历史归档 (间隔: {args.interval}, {args.days}天)")
+    elif args.use_hf_multi:
+        logger.info(f"📊 数据源: HuggingFace多粒度 (间隔: {args.interval})")
+    elif args.use_kaggle:
+        logger.info(f"📊 数据源: Kaggle历史数据")
+    elif args.use_pipeline:
         sources = ["BTC价格"]
         if include_macro and APIConfig.FMP_API_KEY:
             sources.append("宏观经济")
@@ -446,7 +550,12 @@ def main():
             fmp_days=args.fmp_days,
             use_pipeline=args.use_pipeline,
             include_macro=include_macro,
-            include_onchain=include_onchain
+            include_onchain=include_onchain,
+            use_hf_multi=args.use_hf_multi,
+            interval=args.interval,
+            use_binance_hist=args.use_binance_hist,
+            use_kaggle=args.use_kaggle,
+            days=args.days
         ))
     except Exception as e:
         logger.error(f"获取数据失败: {e}")

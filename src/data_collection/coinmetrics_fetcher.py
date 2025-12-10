@@ -76,7 +76,7 @@ class CoinMetricsFetcher(DataFetcher):
         self.api_key = api_key
         self.base_url = "https://community-api.coinmetrics.io/v4"
         self._session: Optional[aiohttp.ClientSession] = None
-        self._last_request_time = 0.0
+        self._last_req_time: float = 0.0  # 使用独立属性避免与父类冲突
         self._min_interval = 1.0  # 每秒最多1个请求
     
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -91,10 +91,10 @@ class CoinMetricsFetcher(DataFetcher):
     async def _rate_limit(self):
         """简单速率限制"""
         import time
-        elapsed = time.time() - self._last_request_time
+        elapsed = time.time() - self._last_req_time
         if elapsed < self._min_interval:
             await asyncio.sleep(self._min_interval - elapsed)
-        self._last_request_time = time.time()
+        self._last_req_time = time.time()
     
     async def _request(self, endpoint: str, params: Optional[Dict] = None) -> Dict:
         """发送API请求"""

@@ -360,8 +360,8 @@ class DataPipeline:
                     continue
             
             # 移除时区
-            if df.index.tz is not None:
-                df.index = df.index.tz_localize(None)
+            if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+                df.index = df.index.tz_localize(None)  # type: ignore
             
             # 如果需要重采样日级数据到小时级（前向填充）
             if resample_to_hourly:

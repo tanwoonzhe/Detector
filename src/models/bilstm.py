@@ -154,6 +154,9 @@ class BiLSTMPredictor(PyTorchPredictor):
         if not isinstance(self.config, dict):
             self.config = {}
         self.config['n_classes'] = n_classes
+        self.config['hidden_size'] = self.hidden_size
+        self.config['num_layers'] = self.num_layers
+        self.config['dropout'] = self.dropout
         
         self.model = BiLSTMNet(
             input_size=n_features,
@@ -181,3 +184,43 @@ class BiLSTMPredictor(PyTorchPredictor):
         logger.info(f"  隐藏层大小: {self.hidden_size}")
         logger.info(f"  LSTM层数: {self.num_layers}")
         logger.info(f"  总参数量: {total_params:,}")
+    
+    def load(self, path: Path, auto_build: bool = True) -> None:
+        """
+        加载模型 - 覆盖基类方法以正确恢复超参数
+        
+        Args:
+            path: 模型文件路径
+            auto_build: 如果模型未构建，是否自动从checkpoint中读取配置并构建
+        """
+        path = Path(path)
+        checkpoint = torch.load(path, map_location=self.device)
+        
+        # 从checkpoint恢复超参数
+        if 'config' in checkpoint:
+            config = checkpoint['config']
+            if 'hidden_size' in config:
+                self.hidden_size = config['hidden_size']
+            if 'num_layers' in config:
+                self.num_layers = config['num_layers']
+            if 'dropout' in config:
+                self.dropout = config['dropout']
+        
+        # 如果模型未构建，尝试自动构建
+        if self.model is None:
+            if auto_build and 'config' in checkpoint and 'input_shape' in checkpoint['config']:
+                input_shape = checkpoint['config']['input_shape']
+                n_classes = checkpoint['config'].get('n_classes', 3)
+                logger.info(f"从checkpoint自动构建BiLSTM模型:")
+                logger.info(f"  input_shape={input_shape}, n_classes={n_classes}")
+                logger.info(f"  hidden_size={self.hidden_size}, num_layers={self.num_layers}")
+                self.build(input_shape=tuple(input_shape), n_classes=n_classes)
+            else:
+                raise RuntimeError("模型未构建！请先调用 build() 方法，或在checkpoint中包含input_shape信息")
+        
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.history = checkpoint.get('history', {})
+        self.config = checkpoint.get('config', {})
+        self._is_trained = True
+        
+        logger.info(f"BiLSTM模型已加载: {path}")

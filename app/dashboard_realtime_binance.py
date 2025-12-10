@@ -161,16 +161,27 @@ def make_prediction(model, df):
         
         # 获取特征列
         feature_cols = engineer.get_feature_columns(df_features)
+        n_raw_features = len(feature_cols)
         
         # 检查模型期望的特征数
         expected_features = None
-        if hasattr(model, 'input_shape') and model.input_shape is not None:
-            expected_features = model.input_shape[1]  # (seq_len, n_features)
-        elif hasattr(model, 'model') and hasattr(model.model, 'n_features_in_'):
-            expected_features = model.model.n_features_in_
+        expected_seq_len = 24  # 默认序列长度
+        is_lightgbm = hasattr(model, 'model') and hasattr(model.model, 'n_features_in_')
+        
+        if is_lightgbm:
+            # LightGBM期望扁平化的特征 (seq_len * n_features)
+            expected_flattened = model.model.n_features_in_
+            # 计算期望的序列长度
+            expected_seq_len = expected_flattened // n_raw_features
+            if expected_seq_len * n_raw_features != expected_flattened:
+                # 如果不能整除，使用保存的特征数调整
+                expected_seq_len = max(1, expected_flattened // max(1, n_raw_features))
+            expected_features = n_raw_features
+        elif hasattr(model, 'input_shape') and model.input_shape is not None:
+            expected_seq_len, expected_features = model.input_shape
         
         # 准备最近的数据
-        window_size = 24  # 使用最近24小时数据
+        window_size = expected_seq_len  # 使用模型期望的序列长度
         if len(df_features) < window_size:
             return None, None
         

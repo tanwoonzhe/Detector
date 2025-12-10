@@ -313,6 +313,7 @@ class PyTorchPredictor(BasePredictor):
             else:
                 raise RuntimeError("模型未构建！请先调用 build() 方法，或在checkpoint中包含input_shape信息")
         
+        assert self.model is not None, "模型应该在此时已构建"
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.history = checkpoint.get('history', {})
         self.config = checkpoint.get('config', {})

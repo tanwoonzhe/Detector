@@ -236,7 +236,7 @@ class FMPFetcher(DataFetcher):
             # 保存到缓存
             df = market_data.to_dataframe()
             if not df.empty:
-                cache_manager.save_ohlcv(df, "bitcoin", "fmp")
+                cache_manager.save_ohlcv("bitcoin", "fmp", df)
             
             return market_data
             
@@ -349,10 +349,18 @@ class FMPFetcher(DataFetcher):
     
     def _df_to_market_data(self, symbol: str, df: pd.DataFrame) -> MarketData:
         """DataFrame转换为MarketData"""
+        from datetime import datetime
         ohlcv_list = []
         for idx, row in df.iterrows():
+            # 转换索引为datetime
+            if isinstance(idx, pd.Timestamp):
+                ts = idx.to_pydatetime()
+            elif isinstance(idx, datetime):
+                ts = idx
+            else:
+                ts = pd.Timestamp(str(idx)).to_pydatetime()
             ohlcv = OHLCV(
-                timestamp=idx.to_pydatetime() if hasattr(idx, 'to_pydatetime') else idx,
+                timestamp=ts,
                 open=float(row['open']),
                 high=float(row['high']),
                 low=float(row['low']),

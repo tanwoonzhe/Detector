@@ -16,13 +16,19 @@
 
 ## 📊 数据源
 
-| 数据类别 | 数据源 | 说明 |
-|---------|--------|------|
-| 加密货币价格 | CoinGecko / FMP | OHLCV、市值、交易量 |
-| 宏观经济 | FMP | 国债收益率、VIX、股指、商品 |
-| 链上数据 | CoinMetrics | 活跃地址、哈希率、NVT等 |
-| 历史数据 | HuggingFace | 多年BTC历史数据集 |
-| 新闻情绪 | FMP / CryptoPanic | 加密货币新闻、市场情绪 |
+### 支持的数据源一览
+
+| 数据类别 | 数据源 | 时间范围 | 粒度 | 说明 |
+|---------|--------|---------|------|------|
+| BTC价格 | HuggingFace | 2017-2025 | 1min~1d | 完整历史数据(推荐) |
+| BTC价格 | Binance历史归档 | 2017-今 | 1m~1d | 官方数据源 |
+| BTC价格 | Kaggle | 2012-2024 | 1min~1d | Bitstamp数据 |
+| BTC价格 | CoinGecko | 90天 | 小时级 | 实时数据 |
+| BTC价格 | FMP | 多年 | 小时级 | 付费API |
+| 宏观经济 | FRED | 50+年 | 日级 | 利率/通胀/M2 |
+| 宏观经济 | FMP | 多年 | 日级 | VIX/股指/商品 |
+| 链上数据 | CoinMetrics | 2011-今 | 日级 | 活跃地址/哈希率/NVT |
+| 新闻情绪 | FMP/CryptoPanic | - | - | 加密货币新闻
 
 ## 📁 项目结构
 
@@ -138,13 +144,49 @@ python train.py --model all --use-hf --merge-recent
 
 | 参数 | 说明 |
 |------|------|
+| **长历史数据源** | |
+| `--use-hf-multi` | 使用多粒度HuggingFace数据(2017-2025) |
+| `--use-binance-hist` | 使用Binance历史归档数据(2017-今) |
+| `--use-kaggle` | 使用Kaggle历史数据(2012-2024) |
+| `--interval` | 数据粒度: 1min/5min/15min/30min/1h/4h/1d |
+| `--days N` | 获取N天历史数据 |
+| **传统数据源** | |
 | `--use-pipeline` | 使用多数据源管道（合并宏观+链上+跨市场） |
 | `--use-fmp` | 使用FMP获取BTC数据 |
-| `--use-hf` | 使用HuggingFace历史数据集 |
-| `--fmp-days N` | 获取N天历史数据 |
+| `--use-hf` | 使用HuggingFace历史数据集（小时级） |
+| `--fmp-days N` | FMP数据天数 |
 | `--no-macro` | 不包含宏观经济数据 |
 | `--no-onchain` | 不包含链上数据 |
 | `--merge-recent` | 合并最新CoinGecko数据 |
+
+### 训练示例
+
+```bash
+# 基础训练（使用CoinGecko 90天数据）
+python train.py --model gru --epochs 100
+
+# 🌟 使用HuggingFace多粒度数据（推荐）
+python train.py --model cnn_lstm --use-hf-multi --interval 15min --epochs 100
+
+# 🌟 使用Binance历史归档（官方数据，最准确）
+python train.py --model all --use-binance-hist --interval 1h --days 365
+
+# 使用Kaggle历史数据
+python train.py --model gru --use-kaggle --epochs 100
+
+# 使用FMP数据
+python train.py --model gru --use-fmp --fmp-days 90
+
+# 使用多数据源管道（合并宏观+链上）
+python train.py --model all --use-pipeline --fmp-days 90
+
+# 多源管道 + 自定义选项
+python train.py --model gru --use-pipeline --no-macro  # 不含宏观数据
+python train.py --model gru --use-pipeline --no-onchain  # 不含链上数据
+
+# 使用HuggingFace历史数据 + 最新数据
+python train.py --model all --use-hf --merge-recent
+```
 
 ### 测试训练流程
 

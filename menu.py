@@ -53,16 +53,38 @@ def train_menu():
     """训练子菜单"""
     print("\n🎓 模型训练")
     print("-" * 40)
-    print("1. 使用 CoinGecko 实时数据")
-    print("2. 使用 HuggingFace 历史数据集")
-    print("3. 混合数据源（HF历史 + CoinGecko最新）")
-    print("4. 返回主菜单")
+    print("📊 传统数据源:")
+    print("  1. CoinGecko 实时数据 (90天)")
+    print("  2. HuggingFace 历史数据 (小时级)")
+    print("  3. 混合数据源（HF历史 + CoinGecko最新）")
+    print()
+    print("🌟 长历史数据源 (推荐):")
+    print("  4. HuggingFace 多粒度 (2017-2025, 支持15min/30min/1h等)")
+    print("  5. Binance 历史归档 (2017至今, 官方数据)")
+    print("  6. 多数据源管道 (宏观+链上+跨市场)")
+    print()
+    print("  7. 返回主菜单")
     print("-" * 40)
     
-    choice = input("选择数据源 (1-4): ").strip()
+    choice = input("选择数据源 (1-7): ").strip()
     
-    if choice == "4":
+    if choice == "7":
         return
+    
+    # 对于新数据源，询问间隔
+    interval = "1h"
+    if choice in ["4", "5"]:
+        print("\n选择数据粒度:")
+        print("1. 1min (最细)")
+        print("2. 5min")
+        print("3. 15min (推荐短期预测)")
+        print("4. 30min")
+        print("5. 1h (默认)")
+        print("6. 4h")
+        print("7. 1d (日线)")
+        interval_choice = input("选择粒度 (1-7, 默认5): ").strip() or "5"
+        interval_map = {"1": "1min", "2": "5min", "3": "15min", "4": "30min", "5": "1h", "6": "4h", "7": "1d"}
+        interval = interval_map.get(interval_choice, "1h")
     
     # 模型选择
     print("\n选择模型:")
@@ -87,6 +109,8 @@ def train_menu():
     print(f"   数据源选择: {choice}")
     print(f"   模型选择: {model_choice} -> {model}")
     print(f"   训练轮数: {epochs}")
+    if choice in ["4", "5"]:
+        print(f"   数据粒度: {interval}")
     
     if choice == "1":
         cmd = f"python train.py --model {model} --epochs {epochs}"
@@ -94,6 +118,12 @@ def train_menu():
         cmd = f"python train.py --model {model} --epochs {epochs} --use-hf"
     elif choice == "3":
         cmd = f"python train.py --model {model} --epochs {epochs} --use-hf --merge-recent"
+    elif choice == "4":
+        cmd = f"python train.py --model {model} --epochs {epochs} --use-hf-multi --interval {interval}"
+    elif choice == "5":
+        cmd = f"python train.py --model {model} --epochs {epochs} --use-binance-hist --interval {interval}"
+    elif choice == "6":
+        cmd = f"python train.py --model {model} --epochs {epochs} --use-pipeline"
     else:
         return
     
