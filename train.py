@@ -23,6 +23,10 @@ import pandas as pd
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
+# 配置日志（同时输出到控制台和文件）
+from config.logging_config import get_training_logger
+logger = get_training_logger()
+
 from config import ModelConfig, TradingConfig, FeatureConfig, APIConfig
 from src.data_collection import CacheManager
 from src.data_collection.coingecko_fetcher import CoinGeckoFetcher
@@ -43,12 +47,6 @@ from src.models import (
     ModelEnsemble
 )
 
-# 配置日志
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 
 async def fetch_data(
@@ -292,13 +290,22 @@ async def fetch_data(
 
 def prepare_data(df: pd.DataFrame):
     """准备训练数据"""
-    logger.info(f"特征工程开始... 初始数据: {len(df)} 行")
+    import time
+    start_time = time.time()
+    
+    logger.info("=" * 50)
+    logger.info("📊 特征工程开始")
+    logger.info("=" * 50)
+    logger.info(f"初始数据: {len(df):,} 行")
     
     engineer = FeatureEngineer()
     
     # 创建特征
+    step_start = time.time()
+    logger.info("\n[步骤 1/4] 创建技术特征...")
     df_features = engineer.create_features(df)
-    logger.info(f"特征创建后: {len(df_features)} 行")
+    logger.info(f"✅ 完成 ({time.time() - step_start:.1f}秒)")
+    logger.info(f"   特征创建后: {len(df_features):,} 行, {len(df_features.columns)} 列")
     
     if len(df_features) < 50:
         logger.error(f"特征工程后数据不足: {len(df_features)} 行 < 50 行最小要求")
@@ -308,19 +315,32 @@ def prepare_data(df: pd.DataFrame):
         )
     
     # 创建标签
+    step_start = time.time()
+    logger.info("\n[步骤 2/4] 创建预测标签...")
     df_features = engineer.create_labels(df_features)
+    logger.info(f"✅ 完成 ({time.time() - step_start:.1f}秒)")
     
     # 准备训练数据
+    step_start = time.time()
+    logger.info("\n[步骤 3/4] 准备训练数据...")
     X, y, feature_names = engineer.prepare_training_data(
         df_features, 
         target_window=1,  # 1小时预测
         for_classification=True
     )
+    logger.info(f"✅ 完成 ({time.time() - step_start:.1f}秒)")
     
     # 创建序列
+    step_start = time.time()
+    logger.info("\n[步骤 4/4] 创建序列数据...")
     X_seq, y_seq = engineer.create_sequences(X, y)
+    logger.info(f"✅ 完成 ({time.time() - step_start:.1f}秒)")
     
-    logger.info(f"特征维度: {X_seq.shape}")
+    total_time = time.time() - start_time
+    logger.info("\n" + "=" * 50)
+    logger.info(f"📊 特征工程完成 (总耗时: {total_time:.1f}秒)")
+    logger.info("=" * 50)
+    logger.info(f"最终数据形状: X={X_seq.shape}, y={y_seq.shape}")
     logger.info(f"类别分布: {np.bincount(y_seq.astype(int))}")
     
     return X_seq, y_seq, feature_names

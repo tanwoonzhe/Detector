@@ -198,9 +198,10 @@ class FeatureEngineer:
         - direction: 方向 (0=下跌, 1=横盘, 2=上涨)
         - magnitude: 幅度 (收益率)
         """
+        logger.info(f"  创建标签: {len(self.prediction_windows)} 个预测窗口...")
         close = df['close']
         
-        for window in self.prediction_windows:
+        for i, window in enumerate(self.prediction_windows):
             window_label = self._format_window(window)
             # 窗口对应的小时数
             periods = int(window) if window >= 1 else 1
@@ -218,12 +219,14 @@ class FeatureEngineer:
                 future_return > self.sideways_threshold, 2,  # 上涨
                 np.where(future_return < -self.sideways_threshold, 0, 1)  # 下跌/横盘
             )
+            logger.info(f"    [{i+1}/{len(self.prediction_windows)}] 窗口 {window_label}h 标签已创建")
         
         # 移除最后几行 (没有未来数据)
         max_periods = int(max(self.prediction_windows))
         if max_periods > 0:
             df = pd.DataFrame(df.iloc[:-max_periods])
         
+        logger.info(f"  ✅ 标签创建完成，剩余 {len(df)} 行")
         return df
     
     def get_feature_columns(self, df: pd.DataFrame) -> List[str]:
@@ -255,11 +258,14 @@ class FeatureEngineer:
         Returns:
             (X, y, feature_names)
         """
+        logger.info("  准备训练数据...")
         feature_cols = self.get_feature_columns(df)
         self._feature_columns = feature_cols
 
         if len(feature_cols) == 0:
             raise ValueError("未生成任何特征列，检查特征工程步骤")
+        
+        logger.info(f"    特征列数: {len(feature_cols)}")
         
         X = df[feature_cols].values
         
@@ -269,19 +275,24 @@ class FeatureEngineer:
         else:
             y = df[f'target_{window_label}h_return'].values
         
+        logger.info(f"    数据形状: X={X.shape}, y={y.shape}")
+        
         # 标准化特征
+        logger.info("    标准化特征...")
         if not self._is_fitted:
             X = self.feature_scaler.fit_transform(X)
             self._is_fitted = True
         else:
             X = self.feature_scaler.transform(X)
         
+        logger.info(f"  ✅ 训练数据准备完成")
         return X, y, feature_cols
     
     def create_sequences(
         self, 
         X: np.ndarray, 
-        y: np.ndarray
+        y: np.ndarray,
+        show_progress: bool = True
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         创建序列数据 (用于RNN/LSTM/GRU)
@@ -289,6 +300,7 @@ class FeatureEngineer:
         Args:
             X: 特征矩阵 (samples, features)
             y: 标签数组 (samples,)
+            show_progress: 是否显示进度条
             
         Returns:
             (X_seq, y_seq) 
@@ -299,12 +311,19 @@ class FeatureEngineer:
         n_samples = len(X) - seq_len
         n_features = X.shape[1]
         
-        X_seq = np.zeros((n_samples, seq_len, n_features))
-        y_seq = np.zeros(n_samples)
+        logger.info(f"  创建序列数据: {n_samples} 个样本, 序列长度={seq_len}, 特征数={n_features}")
         
-        for i in range(n_samples):
-            X_seq[i] = X[i:i+seq_len]
-            y_seq[i] = y[i+seq_len]
+        # 使用向量化操作加速（比循环快很多）
+        logger.info(f"  使用向量化方法创建序列...")
+        
+        # 创建索引数组
+        indices = np.arange(n_samples)[:, None] + np.arange(seq_len)
+        
+        # 一次性索引所有序列
+        X_seq = X[indices]  # (n_samples, seq_len, n_features)
+        y_seq = y[seq_len:seq_len + n_samples]
+        
+        logger.info(f"  ✅ 序列创建完成: X_seq={X_seq.shape}, y_seq={y_seq.shape}")
         
         return X_seq, y_seq
     

@@ -5,6 +5,7 @@ from .bilstm import BiLSTMPredictor, BiLSTMNet
 from .cnn_lstm import CNNLSTMPredictor, CNNLSTMNet, ResCNNLSTMNet
 from .lightgbm_model import LightGBMPredictor, SequenceLightGBM
 from .ensemble import ModelEnsemble, StackingEnsemble, MultiWindowEnsemble
+from .model_manager import ModelManager, ModelInfo, model_manager
 
 __all__ = [
     # 基类
@@ -27,5 +28,9 @@ __all__ = [
     # 集成
     "ModelEnsemble",
     "StackingEnsemble",
-    "MultiWindowEnsemble"
+    "MultiWindowEnsemble",
+    # 模型管理
+    "ModelManager",
+    "ModelInfo",
+    "model_manager"
 ]

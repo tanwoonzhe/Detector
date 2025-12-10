@@ -10,6 +10,10 @@ from pathlib import Path
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
+# 配置完整日志（捕获所有 print 和 stderr 输出）
+from config.logging_config import setup_full_logging
+log_file = setup_full_logging("menu")
+
 
 def print_banner():
     """打印欢迎横幅"""

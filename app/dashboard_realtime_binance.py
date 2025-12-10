@@ -16,6 +16,7 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
+from typing import Optional
 import asyncio
 import sys
 from pathlib import Path
@@ -28,6 +29,7 @@ from src.features.engineer import FeatureEngineer
 from src.models.gru import GRUPredictor
 from src.models.lightgbm_model import LightGBMPredictor
 from src.models.bilstm import BiLSTMPredictor
+from src.models.model_manager import ModelManager, ModelInfo
 
 st.set_page_config(
     page_title="BTC实时价格监控",
@@ -402,18 +404,66 @@ def main():
     st.title("📈 BTC/USDT 实时价格监控")
     st.markdown("*数据来源: Binance 公开 API (免费)*")
     
+    # 初始化模型管理器
+    model_manager = ModelManager()
+    available_models = model_manager.scan_models()
+    
     # 侧边栏设置
     st.sidebar.header("⚙️ 设置")
     
     # 模型选择
     enable_prediction = st.sidebar.checkbox("🤖 启用 AI 预测", value=False)
-    model_type = None
+    selected_model_info: Optional[ModelInfo] = None
+    
     if enable_prediction:
-        model_type = st.sidebar.selectbox(
-            "选择预测模型",
-            ["GRU", "BiLSTM", "LightGBM"],
-            index=0
-        )
+        if available_models:
+            # 创建模型选项列表
+            model_options = {
+                f"{m.name} ({m.model_type}, {m.file_size_mb:.1f}MB)": m
+                for m in available_models
+            }
+            selected_key = st.sidebar.selectbox(
+                "选择预测模型",
+                list(model_options.keys()),
+                index=0
+            )
+            selected_model_info = model_options[selected_key]
+            
+            # 显示模型详情
+            with st.sidebar.expander("📊 模型详情", expanded=False):
+                if selected_model_info:
+                    st.markdown(f"**模型类型**: {selected_model_info.model_type}")
+                    st.markdown(f"**文件大小**: {selected_model_info.file_size_mb:.2f} MB")
+                    st.markdown(f"**创建时间**: {selected_model_info.created_time.strftime('%Y-%m-%d %H:%M')}")
+                    
+                    # 显示模型配置
+                    config_items = []
+                    if selected_model_info.input_shape:
+                        config_items.append(f"  - 输入形状: {selected_model_info.input_shape}")
+                    if selected_model_info.hidden_size:
+                        config_items.append(f"  - 隐藏层大小: {selected_model_info.hidden_size}")
+                    if selected_model_info.num_layers:
+                        config_items.append(f"  - 层数: {selected_model_info.num_layers}")
+                    if selected_model_info.dropout:
+                        config_items.append(f"  - Dropout: {selected_model_info.dropout}")
+                    if config_items:
+                        st.markdown("**配置参数**:")
+                        st.text("\n".join(config_items))
+                    
+                    # 显示训练指标
+                    metrics_items = []
+                    if selected_model_info.epochs_trained:
+                        metrics_items.append(f"  - 训练轮数: {selected_model_info.epochs_trained}")
+                    if selected_model_info.best_val_accuracy:
+                        metrics_items.append(f"  - 最佳验证准确率: {selected_model_info.best_val_accuracy:.4f}")
+                    if selected_model_info.best_val_loss:
+                        metrics_items.append(f"  - 最佳验证损失: {selected_model_info.best_val_loss:.4f}")
+                    if metrics_items:
+                        st.markdown("**训练指标**:")
+                        st.text("\n".join(metrics_items))
+        else:
+            st.sidebar.warning("⚠️ 未找到已训练的模型，请先运行 train.py")
+            selected_model_info = None
     
     # 刷新间隔
     refresh_interval = st.sidebar.selectbox(
@@ -453,11 +503,11 @@ def main():
     
     # 加载模型
     model = None
-    if enable_prediction and model_type:
-        with st.spinner(f"加载 {model_type} 模型..."):
-            model = load_model(model_type)
+    if enable_prediction and selected_model_info:
+        with st.spinner(f"加载 {selected_model_info.name} 模型..."):
+            model = model_manager.load_model(selected_model_info.file_path)
             if model is None:
-                st.sidebar.warning(f"⚠️ {model_type} 模型未找到")
+                st.sidebar.warning(f"⚠️ {selected_model_info.name} 模型加载失败")
     
     # 获取实时数据
     try:
