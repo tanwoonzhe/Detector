@@ -21,9 +21,11 @@ import pandas as pd
 # 添加项目路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config import ModelConfig, TradingConfig, FeatureConfig
+from config import ModelConfig, TradingConfig, FeatureConfig, APIConfig
 from src.data_collection import CacheManager
 from src.data_collection.coingecko_fetcher import CoinGeckoFetcher
+from src.data_collection.fmp_fetcher import FMPFetcher
+from src.data_collection.data_pipeline import DataPipeline
 from src.sentiment import SentimentAggregator
 from src.features import FeatureEngineer
 from src.validation import WalkForwardValidator, TimeSeriesMetrics
@@ -43,14 +45,95 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def fetch_data(use_hf: bool = False, merge_recent: bool = False):
-    """获取训练数据"""
+async def fetch_data(
+    use_hf: bool = False, 
+    merge_recent: bool = False, 
+    use_fmp: bool = False, 
+    fmp_days: int = 90,
+    use_pipeline: bool = False,
+    include_macro: bool = True,
+    include_onchain: bool = True
+):
+    """
+    获取训练数据
+    
+    Args:
+        use_hf: 使用HuggingFace历史数据集
+        merge_recent: 合并最近的CoinGecko数据（与use_hf一起使用）
+        use_fmp: 使用Financial Modeling Prep (FMP) API
+        fmp_days: FMP数据天数
+        use_pipeline: 使用多数据源管道（宏观+链上+跨市场）
+        include_macro: 包含宏观数据（需要FMP API）
+        include_onchain: 包含链上数据（CoinMetrics）
+    """
     logger.info("获取历史数据...")
     
     df = None
     
-    # 选项1: 使用 HuggingFace 历史数据
-    if use_hf:
+    # 选项0: 使用多数据源管道
+    if use_pipeline:
+        logger.info("📥 使用多数据源管道获取数据...")
+        try:
+            pipeline = DataPipeline(
+                fmp_api_key=APIConfig.FMP_API_KEY,
+                coinmetrics_api_key=getattr(APIConfig, 'COINMETRICS_API_KEY', '')
+            )
+            
+            df = await pipeline.fetch_all(
+                days=fmp_days,
+                include_macro=include_macro and bool(APIConfig.FMP_API_KEY),
+                include_onchain=include_onchain,
+                include_cross_asset=True,
+                resample_to_hourly=True
+            )
+            
+            await pipeline.close()
+            
+            if not df.empty:
+                logger.info(f"✅ 多源数据加载成功: {len(df)} 条记录, {len(df.columns)} 列")
+                logger.info(f"   时间范围: {df.index.min()} ~ {df.index.max()}")
+                return df
+            else:
+                logger.warning("⚠️ 多源数据为空，回退到其他数据源")
+                df = None
+                
+        except Exception as e:
+            logger.error(f"❌ 多源数据加载异常: {e}")
+            logger.info("回退到其他数据源...")
+            df = None
+    
+    # 选项1: 使用 FMP 数据
+    if df is None and use_fmp:
+        logger.info("📥 使用 FMP API 获取数据...")
+        try:
+            api_key = APIConfig.FMP_API_KEY
+            if not api_key:
+                logger.warning("⚠️ FMP_API_KEY 未设置，请在 .env 文件中配置")
+                raise ValueError("FMP API密钥未设置")
+            
+            fetcher = FMPFetcher(api_key=api_key)
+            market_data = await fetcher.get_hourly_ohlcv(
+                symbol="BTCUSD",
+                days=fmp_days
+            )
+            await fetcher.close()
+            
+            df = market_data.to_dataframe()
+            
+            if not df.empty:
+                logger.info(f"✅ FMP数据加载成功: {len(df)} 条记录")
+                logger.info(f"   时间范围: {df.index.min()} ~ {df.index.max()}")
+            else:
+                logger.warning("⚠️ FMP数据为空，回退到其他数据源")
+                df = None
+                
+        except Exception as e:
+            logger.error(f"❌ FMP数据加载异常: {e}")
+            logger.info("回退到其他数据源...")
+            df = None
+    
+    # 选项2: 使用 HuggingFace 历史数据
+    if df is None and use_hf:
         logger.info("📥 加载 HuggingFace 历史数据集...")
         try:
             from src.data_collection.hf_loader_fixed import load_hf_btc_data
@@ -306,7 +389,28 @@ def main():
                        help='使用HuggingFace历史数据集')
     parser.add_argument('--merge-recent', action='store_true',
                        help='合并最近的CoinGecko数据（与--use-hf一起使用）')
+    parser.add_argument('--use-fmp', action='store_true',
+                       help='使用Financial Modeling Prep (FMP) API获取数据')
+    parser.add_argument('--fmp-days', type=int, default=90,
+                       help='数据天数（默认90天）')
+    
+    # 多数据源管道参数
+    parser.add_argument('--use-pipeline', action='store_true',
+                       help='使用多数据源管道（合并宏观+链上+跨市场数据）')
+    parser.add_argument('--include-macro', action='store_true', default=True,
+                       help='包含宏观经济数据（需要FMP API）')
+    parser.add_argument('--include-onchain', action='store_true', default=True,
+                       help='包含链上数据（CoinMetrics）')
+    parser.add_argument('--no-macro', action='store_true',
+                       help='不包含宏观数据')
+    parser.add_argument('--no-onchain', action='store_true',
+                       help='不包含链上数据')
+    
     args = parser.parse_args()
+    
+    # 处理参数
+    include_macro = not args.no_macro
+    include_onchain = not args.no_onchain
     
     # 更新配置
     ModelConfig.EPOCHS = args.epochs
@@ -316,9 +420,34 @@ def main():
     logger.info("BTC趋势预测模型训练")
     logger.info("="*50)
     
+    # 显示数据源选择
+    if args.use_pipeline:
+        sources = ["BTC价格"]
+        if include_macro and APIConfig.FMP_API_KEY:
+            sources.append("宏观经济")
+        if include_onchain:
+            sources.append("链上数据")
+        sources.append("跨市场资产")
+        logger.info(f"📊 数据源: 多源管道 ({', '.join(sources)})")
+        logger.info(f"   数据天数: {args.fmp_days}天")
+    elif args.use_fmp:
+        logger.info(f"📊 数据源: FMP ({args.fmp_days}天)")
+    elif args.use_hf:
+        logger.info("📊 数据源: HuggingFace" + (" + CoinGecko最新数据" if args.merge_recent else ""))
+    else:
+        logger.info("📊 数据源: CoinGecko (90天)")
+    
     # 获取数据
     try:
-        df = asyncio.run(fetch_data(use_hf=args.use_hf, merge_recent=args.merge_recent))
+        df = asyncio.run(fetch_data(
+            use_hf=args.use_hf, 
+            merge_recent=args.merge_recent,
+            use_fmp=args.use_fmp,
+            fmp_days=args.fmp_days,
+            use_pipeline=args.use_pipeline,
+            include_macro=include_macro,
+            include_onchain=include_onchain
+        ))
     except Exception as e:
         logger.error(f"获取数据失败: {e}")
         logger.info("使用模拟数据进行演示...")

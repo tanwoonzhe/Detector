@@ -47,6 +47,18 @@ class APIConfig:
     REDDIT_CLIENT_ID = os.getenv("REDDIT_CLIENT_ID", "")
     REDDIT_CLIENT_SECRET = os.getenv("REDDIT_CLIENT_SECRET", "")
     REDDIT_USER_AGENT = "BTCUSDT_Predictor/1.0"
+    
+    # Financial Modeling Prep (FMP)
+    # 支持: 加密货币、股票、指数、宏观经济、商品、外汇、新闻
+    FMP_API_KEY = os.getenv("FMP_API_KEY", "")
+    FMP_BASE_URL = "https://financialmodelingprep.com/api/v3"
+    FMP_RATE_LIMIT = 5  # 每分钟请求数（保守值）
+    FMP_DAILY_LIMIT = 250  # 免费版每日限制
+    
+    # Coin Metrics (链上数据)
+    # 免费社区版API，支持链上指标、网络统计
+    COINMETRICS_API_KEY = os.getenv("COINMETRICS_API_KEY", "")  # 社区版可为空
+    COINMETRICS_BASE_URL = "https://community-api.coinmetrics.io/v4"
 
 # ===== 交易对配置 =====
 class TradingConfig:

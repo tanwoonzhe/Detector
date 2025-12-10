@@ -17,6 +17,7 @@ class DataSource(Enum):
     """数据源枚举"""
     COINGECKO = "coingecko"
     BINANCE = "binance"
+    FMP = "fmp"  # Financial Modeling Prep
 
 
 @dataclass

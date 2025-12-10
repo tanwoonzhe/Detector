@@ -6,10 +6,23 @@
 
 - **多模型集成**: GRU + Attention, BiLSTM, CNN-LSTM, LightGBM
 - **多窗口预测**: 支持0.5h, 1h, 2h, 4h预测窗口
+- **多数据源支持**: CoinGecko, FMP, CoinMetrics, HuggingFace
 - **情感分析**: 整合Fear & Greed Index, CryptoPanic新闻, Reddit情感
 - **技术分析**: 50+技术指标, 蜡烛图形态, 支撑阻力位
+- **宏观数据**: 国债收益率, VIX, S&P500, 黄金, 美元指数
+- **链上数据**: 活跃地址, 哈希率, NVT, 交易数等
 - **实时Dashboard**: Streamlit交互式界面
 - **专业验证**: Purged K-Fold, Walk-Forward时序验证
+
+## 📊 数据源
+
+| 数据类别 | 数据源 | 说明 |
+|---------|--------|------|
+| 加密货币价格 | CoinGecko / FMP | OHLCV、市值、交易量 |
+| 宏观经济 | FMP | 国债收益率、VIX、股指、商品 |
+| 链上数据 | CoinMetrics | 活跃地址、哈希率、NVT等 |
+| 历史数据 | HuggingFace | 多年BTC历史数据集 |
+| 新闻情绪 | FMP / CryptoPanic | 加密货币新闻、市场情绪 |
 
 ## 📁 项目结构
 
@@ -22,6 +35,9 @@ Detect/
 │   ├── data_collection/    # 数据采集
 │   │   ├── base.py         # 抽象基类
 │   │   ├── coingecko_fetcher.py  # CoinGecko数据源
+│   │   ├── fmp_fetcher.py        # FMP数据源（宏观+加密）
+│   │   ├── coinmetrics_fetcher.py # CoinMetrics链上数据
+│   │   ├── data_pipeline.py      # 多源数据合并管道
 │   │   ├── binance_fetcher.py    # Binance数据源(备用)
 │   │   └── cache.py        # SQLite缓存
 │   ├── sentiment/          # 情感分析
@@ -71,7 +87,22 @@ pip install -r requirements.txt
 3. 配置环境变量:
 ```bash
 copy .env.example .env
-# 编辑.env文件，填入API密钥(可选)
+# 编辑.env文件，填入API密钥
+```
+
+### 环境变量说明
+
+```env
+# Financial Modeling Prep (推荐，支持宏观+加密数据)
+FMP_API_KEY=your_fmp_api_key
+
+# CoinMetrics (链上数据，社区版免费)
+COINMETRICS_API_KEY=  # 可为空
+
+# 其他可选
+BINANCE_API_KEY=your_binance_key
+BINANCE_SECRET_KEY=your_binance_secret
+CRYPTOPANIC_API_KEY=your_cryptopanic_key
 ```
 
 ## 🎯 使用方法
@@ -86,15 +117,34 @@ python menu.py
 ### 训练模型
 
 ```bash
-# 方法1: 使用 train.py（推荐）
+# 基础训练（使用CoinGecko）
 python train.py --model gru --epochs 100
 
-# 方法2: 训练所有模型
-python train.py --model all --epochs 50
+# 使用FMP数据
+python train.py --model gru --use-fmp --fmp-days 90
 
-# 方法3: 使用 main.py（旧方式）
-python main.py --train --model gru --epochs 100
+# 🌟 使用多数据源管道（推荐）
+python train.py --model all --use-pipeline --fmp-days 90
+
+# 多源管道 + 自定义选项
+python train.py --model gru --use-pipeline --no-macro  # 不含宏观数据
+python train.py --model gru --use-pipeline --no-onchain  # 不含链上数据
+
+# 使用HuggingFace历史数据
+python train.py --model all --use-hf --merge-recent
 ```
+
+### 数据源选项
+
+| 参数 | 说明 |
+|------|------|
+| `--use-pipeline` | 使用多数据源管道（合并宏观+链上+跨市场） |
+| `--use-fmp` | 使用FMP获取BTC数据 |
+| `--use-hf` | 使用HuggingFace历史数据集 |
+| `--fmp-days N` | 获取N天历史数据 |
+| `--no-macro` | 不包含宏观经济数据 |
+| `--no-onchain` | 不包含链上数据 |
+| `--merge-recent` | 合并最新CoinGecko数据 |
 
 ### 测试训练流程
 
